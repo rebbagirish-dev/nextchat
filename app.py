@@ -57,7 +57,8 @@ def hash_pw(pw):
     return hashlib.sha256(pw.encode()).hexdigest()
 
 def now_ts():
-    return datetime.datetime.now().strftime("%H:%M")
+    ist = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+    return datetime.datetime.now(ist).strftime("%I:%M %p")
 
 def get_user_by_token(token):
     if not token:
@@ -189,6 +190,32 @@ def api_clear():
     conn.commit()
     conn.close()
     return jsonify({"ok": True})
+
+# sendBeacon passes token as query param (can't set headers on beacon)
+@app.route("/api/clear-beacon", methods=["POST"])
+def api_clear_beacon():
+    token = request.args.get("token", "").strip()
+    user  = get_user_by_token(token)
+    if user:
+        conn = get_conn()
+        conn.execute("DELETE FROM messages")
+        conn.commit()
+        conn.close()
+    return "", 204
+
+@app.route("/api/logout-beacon", methods=["POST"])
+def api_logout_beacon():
+    token = request.args.get("token", "").strip()
+    user  = get_user_by_token(token)
+    if user:
+        conn = get_conn()
+        conn.execute(
+            "UPDATE users SET token=NULL, online=0, last_seen=? WHERE id=?",
+            (now_ts(), user["id"])
+        )
+        conn.commit()
+        conn.close()
+    return "", 204
 
 @app.route("/api/poll")
 def api_poll():

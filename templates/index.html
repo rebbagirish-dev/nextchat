@@ -671,6 +671,28 @@ document.getElementById("msg-input").addEventListener("blur", () => {
 });
 
 // ── Auto-login if token saved ──────────────────────────────────────────────────
+
+// Apply saved mute preference to button immediately on page load
+updateMuteBtn();
+
+// Clear chat + logout when window/tab is closed
+window.addEventListener("beforeunload", () => {
+  if (authToken) {
+    // Use sendBeacon — it works even as the page is closing
+    // (regular fetch gets cancelled by the browser on unload)
+    const headers = { type: "application/json" };
+    const clearBlob  = new Blob([JSON.stringify({})], headers);
+    const logoutBlob = new Blob([JSON.stringify({})], headers);
+    navigator.sendBeacon(
+      "/api/clear-beacon?token=" + encodeURIComponent(authToken), clearBlob
+    );
+    navigator.sendBeacon(
+      "/api/logout-beacon?token=" + encodeURIComponent(authToken), logoutBlob
+    );
+    clearAuth();
+  }
+});
+
 (async () => {
   if (authToken) {
     await initApp();
