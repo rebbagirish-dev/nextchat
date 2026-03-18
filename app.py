@@ -1,21 +1,22 @@
 """
-NexChat - Flask Web App
+NexChat - Flask Web App (Token-based auth — works on Railway/Render/etc.)
 Run locally: python app.py
-Deploy: Railway / Render / PythonAnywhere
 """
 
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from flask import Flask, render_template, request, jsonify
 import sqlite3
 import hashlib
 import datetime
 import os
+import secrets
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "nexchat-secret-key-change-in-prod")
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "nexchat.db")
-
-# ── DB helpers ─────────────────────────────────────────────────────────────────
+# DB path: /tmp on Railway (writable), local folder otherwise
+if os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("RENDER"):
+    DB_PATH = "/tmp/nexchat.db"
+else:
+    DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "nexchat.db")
 
 def get_conn():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
@@ -30,6 +31,7 @@ def init_db():
             id        INTEGER PRIMARY KEY,
             username  TEXT UNIQUE NOT NULL,
             password  TEXT NOT NULL,
+            token     TEXT,
             online    INTEGER DEFAULT 0,
             last_seen TEXT
         );
@@ -49,107 +51,104 @@ def init_db():
     conn.commit()
     conn.close()
 
+init_db()
+
 def hash_pw(pw):
     return hashlib.sha256(pw.encode()).hexdigest()
 
 def now_ts():
     return datetime.datetime.now().strftime("%H:%M")
 
-# ── Routes ─────────────────────────────────────────────────────────────────────
+def get_user_by_token(token):
+    if not token:
+        return None
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM users WHERE token=?", (token,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def require_auth():
+    token = request.headers.get("X-Auth-Token", "").strip()
+    user  = get_user_by_token(token)
+    if not user:
+        return None, (jsonify({"ok": False, "error": "Not authenticated"}), 401)
+    return user, None
 
 @app.route("/")
 def index():
-    if "user_id" not in session:
-        return redirect(url_for("login"))
     return render_template("index.html")
 
-@app.route("/login", methods=["GET", "POST"])
+@app.route("/health")
+def health():
+    return jsonify({"status": "ok"}), 200
+
+@app.route("/login", methods=["POST"])
 def login():
-    if request.method == "POST":
-        data = request.get_json()
+    try:
+        data     = request.get_json(force=True, silent=True) or {}
         username = data.get("username", "").strip()
         password = data.get("password", "").strip()
+        if not username or not password:
+            return jsonify({"ok": False, "error": "Username and password required."})
         conn = get_conn()
         user = conn.execute(
             "SELECT * FROM users WHERE username=? AND password=?",
             (username, hash_pw(password))
         ).fetchone()
-        conn.close()
-        if user:
-            session["user_id"]   = user["id"]
-            session["username"]  = user["username"]
-            # mark online
-            conn = get_conn()
-            conn.execute("UPDATE users SET online=1 WHERE id=?", (user["id"],))
-            conn.commit()
+        if not user:
             conn.close()
-            return jsonify({"ok": True, "username": user["username"]})
-        return jsonify({"ok": False, "error": "Invalid username or password."})
-    return render_template("index.html")
+            return jsonify({"ok": False, "error": "Invalid username or password."})
+        token = secrets.token_hex(32)
+        conn.execute("UPDATE users SET token=?, online=1 WHERE id=?", (token, user["id"]))
+        conn.commit()
+        conn.close()
+        return jsonify({"ok": True, "token": token, "user_id": user["id"], "username": user["username"]})
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Server error: {str(e)}"}), 500
 
 @app.route("/logout", methods=["POST"])
 def logout():
-    if "user_id" in session:
+    user, _ = require_auth()
+    if user:
         conn = get_conn()
-        conn.execute(
-            "UPDATE users SET online=0, last_seen=? WHERE id=?",
-            (now_ts(), session["user_id"])
-        )
+        conn.execute("UPDATE users SET token=NULL, online=0, last_seen=? WHERE id=?", (now_ts(), user["id"]))
         conn.commit()
         conn.close()
-    session.clear()
     return jsonify({"ok": True})
 
 @app.route("/api/me")
 def api_me():
-    if "user_id" not in session:
+    user, _ = require_auth()
+    if not user:
         return jsonify({"logged_in": False})
-    return jsonify({"logged_in": True, "user_id": session["user_id"],
-                    "username": session["username"]})
+    return jsonify({"logged_in": True, "user_id": user["id"], "username": user["username"]})
 
 @app.route("/api/other")
 def api_other():
-    if "user_id" not in session:
-        return jsonify({}), 401
-    conn = get_conn()
-    other = conn.execute(
-        "SELECT id, username, online, last_seen FROM users WHERE id != ?",
-        (session["user_id"],)
-    ).fetchone()
+    user, err = require_auth()
+    if err: return err
+    conn  = get_conn()
+    other = conn.execute("SELECT id, username, online, last_seen FROM users WHERE id != ?", (user["id"],)).fetchone()
     conn.close()
-    if not other:
-        return jsonify({})
-    return jsonify(dict(other))
+    return jsonify(dict(other) if other else {})
 
 @app.route("/api/messages")
 def api_messages():
-    if "user_id" not in session:
-        return jsonify([]), 401
-    my_id = session["user_id"]
-    conn = get_conn()
-    # find other user id
+    user, err = require_auth()
+    if err: return err
+    my_id = user["id"]
+    conn  = get_conn()
     other = conn.execute("SELECT id FROM users WHERE id != ?", (my_id,)).fetchone()
     if not other:
         conn.close()
         return jsonify([])
     other_id = other["id"]
-
-    # mark their messages as delivered (I'm online & fetching)
-    conn.execute(
-        "UPDATE messages SET status='delivered' WHERE sender_id=? AND receiver_id=? AND status='sent'",
-        (other_id, my_id)
-    )
-    # mark their messages as read (I'm viewing the chat)
-    conn.execute(
-        "UPDATE messages SET status='read' WHERE sender_id=? AND receiver_id=? AND status='delivered'",
-        (other_id, my_id)
-    )
+    conn.execute("UPDATE messages SET status='delivered' WHERE sender_id=? AND receiver_id=? AND status='sent'", (other_id, my_id))
+    conn.execute("UPDATE messages SET status='read' WHERE sender_id=? AND receiver_id=? AND status='delivered'", (other_id, my_id))
     conn.commit()
-
     rows = conn.execute("""
         SELECT id, sender_id, body, timestamp, status FROM messages
-        WHERE (sender_id=? AND receiver_id=?)
-           OR (sender_id=? AND receiver_id=?)
+        WHERE (sender_id=? AND receiver_id=?) OR (sender_id=? AND receiver_id=?)
         ORDER BY id ASC
     """, (my_id, other_id, other_id, my_id)).fetchall()
     conn.close()
@@ -157,30 +156,28 @@ def api_messages():
 
 @app.route("/api/send", methods=["POST"])
 def api_send():
-    if "user_id" not in session:
-        return jsonify({"ok": False}), 401
-    data = request.get_json()
+    user, err = require_auth()
+    if err: return err
+    data = request.get_json(force=True, silent=True) or {}
     body = data.get("body", "").strip()
     if not body:
         return jsonify({"ok": False, "error": "Empty message"})
-    my_id = session["user_id"]
-    conn = get_conn()
+    my_id = user["id"]
+    conn  = get_conn()
     other = conn.execute("SELECT id FROM users WHERE id != ?", (my_id,)).fetchone()
     if not other:
         conn.close()
         return jsonify({"ok": False})
-    conn.execute(
-        "INSERT INTO messages (sender_id,receiver_id,body,timestamp,status) VALUES (?,?,?,?,'sent')",
-        (my_id, other["id"], body, now_ts())
-    )
+    conn.execute("INSERT INTO messages (sender_id,receiver_id,body,timestamp,status) VALUES (?,?,?,?,'sent')",
+                 (my_id, other["id"], body, now_ts()))
     conn.commit()
     conn.close()
     return jsonify({"ok": True})
 
 @app.route("/api/clear", methods=["POST"])
 def api_clear():
-    if "user_id" not in session:
-        return jsonify({"ok": False}), 401
+    user, err = require_auth()
+    if err: return err
     conn = get_conn()
     conn.execute("DELETE FROM messages")
     conn.commit()
@@ -189,28 +186,20 @@ def api_clear():
 
 @app.route("/api/poll")
 def api_poll():
-    """Lightweight endpoint: returns message count + other user status."""
-    if "user_id" not in session:
-        return jsonify({}), 401
-    my_id = session["user_id"]
-    conn = get_conn()
-    count = conn.execute(
-        "SELECT COUNT(*) as c FROM messages WHERE sender_id != ? OR receiver_id != ?",
-        (my_id, my_id)   # just total count is fine
-    ).fetchone()["c"]
-    other = conn.execute(
-        "SELECT online, last_seen FROM users WHERE id != ?", (my_id,)
-    ).fetchone()
+    user, err = require_auth()
+    if err: return jsonify({"logged_in": False}), 401
+    my_id = user["id"]
+    conn  = get_conn()
+    total = conn.execute("SELECT COUNT(*) as c FROM messages").fetchone()["c"]
+    other = conn.execute("SELECT online, last_seen FROM users WHERE id != ?", (my_id,)).fetchone()
     conn.close()
     return jsonify({
-        "msg_count": count,
+        "logged_in": True,
+        "msg_count": total,
         "other_online": other["online"] if other else 0,
         "other_last_seen": other["last_seen"] if other else ""
     })
 
-# ── Entry point ────────────────────────────────────────────────────────────────
-
 if __name__ == "__main__":
-    init_db()
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
