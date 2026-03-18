@@ -44,7 +44,7 @@ def init_db():
             status      TEXT DEFAULT 'sent'
         );
     """)
-    for uname, pwd in [("Alice", "alice123"), ("Bob", "bob123")]:
+    for uname, pwd in [("alice", "Butterflies1!"), ("bob", "Butterflies1!")]:
         pw_hash = hashlib.sha256(pwd.encode()).hexdigest()
         c.execute("INSERT OR IGNORE INTO users (username, password) VALUES (?,?)",
                   (uname, pw_hash))
@@ -81,6 +81,12 @@ def index():
 @app.route("/health")
 def health():
     return jsonify({"status": "ok"}), 200
+
+@app.route("/logged-out")
+def logged_out():
+    # Neutral landing page after logout — just serves the app shell
+    # which will show the login screen since no token exists
+    return render_template("index.html")
 
 @app.route("/login", methods=["POST"])
 def login():
