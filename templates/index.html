@@ -595,7 +595,8 @@ document.getElementById("modal-confirm").addEventListener("click", async () => {
 document.getElementById("logout-btn").addEventListener("click", async () => {
   if (pollTimer) clearInterval(pollTimer);
   resetTitle();
-  await api("/logout", { method: "POST" }).catch(() => {});
+  await api("/api/clear", { method: "POST" }).catch(() => {});  // wipe all messages
+  await api("/logout",    { method: "POST" }).catch(() => {});  // invalidate token
   clearAuth();
   eraseHistoryAndRedirect();
 });
