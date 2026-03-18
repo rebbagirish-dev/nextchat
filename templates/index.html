@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content"/>
 <title>NexChat</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
@@ -28,7 +28,14 @@
     --hover:        #2A3942;
     --font: 'DM Sans', sans-serif;
   }
-  html, body { height: 100%; font-family: var(--font); background: var(--bg-app); color: var(--text); overflow: hidden; }
+  html { height: 100%; height: 100dvh; }
+  body {
+    height: 100%; height: 100dvh;
+    font-family: var(--font); background: var(--bg-app); color: var(--text);
+    overflow: hidden;
+    /* Prevent iOS rubber-band scroll on body */
+    position: fixed; width: 100%;
+  }
 
   /* LOGIN */
   #login-screen {
@@ -67,7 +74,11 @@
   .login-hint { margin-top: 18px; font-size: 11px; color: var(--text-sub); text-align: center; line-height: 1.7; }
 
   /* APP */
-  #app { height: 100vh; display: flex; flex-direction: column; }
+  #app {
+    height: 100vh; height: 100dvh;
+    height: var(--app-height, 100dvh);
+    display: flex; flex-direction: column;
+  }
   #app.hidden { display: none; }
 
   .chat-header {
@@ -143,12 +154,14 @@
   .input-bar {
     background: var(--bg-input-bar); display: flex; align-items: center;
     padding: 8px 16px; gap: 10px; border-top: 1px solid var(--divider); flex-shrink: 0;
+    /* iOS home bar / notch safe area */
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
   }
   #msg-input {
     flex: 1; background: var(--bg-input); border: none; border-radius: 24px;
-    padding: 10px 18px; font-family: var(--font); font-size: 14.5px;
+    padding: 10px 18px; font-family: var(--font); font-size: 16px; /* 16px prevents iOS zoom */
     color: var(--text); outline: none; resize: none; max-height: 120px; overflow-y: auto;
-    line-height: 1.45;
+    line-height: 1.45; -webkit-appearance: none;
   }
   #msg-input::placeholder { color: var(--text-sub); }
   .send-btn {
@@ -196,6 +209,16 @@
   @keyframes slideDown { from { opacity:0; transform:translateY(-8px);} to { opacity:1; transform:translateY(0); } }
   @keyframes bubbleIn  { from { opacity:0; transform:translateY(6px) scale(.97); } to { opacity:1; transform:none; } }
   .hidden { display: none !important; }
+
+  /* ── Mobile fixes ── */
+  @media (max-width: 480px) {
+    .bubble       { max-width: 82%; }
+    .login-card   { width: 92%; padding: 32px 24px; }
+    #chat-area    { padding: 10px 3%; }
+    .chat-header  { padding: 6px 10px; }
+    .send-btn     { width: 40px; height: 40px; font-size: 16px; }
+    #msg-input    { padding: 9px 14px; }
+  }
 </style>
 </head>
 <body>
@@ -321,7 +344,50 @@ function updateMuteBtn() {
   }
 }
 
-function saveAuth(token, uid, username) {
+// ── Title bar notification ─────────────────────────────────────────────────────
+let titleFlashTimer  = null;
+let titleFlashCount  = 0;
+const BASE_TITLE     = "NexChat";
+
+function notifyTitle(senderName, msgBody) {
+  // Truncate to 20 chars with ellipsis
+  const preview = msgBody.length > 20 ? msgBody.slice(0, 20) + "…" : msgBody;
+  const alertTitle  = `💬 ${senderName}: ${preview}`;
+  const flashTitle  = `🔔 New message!`;
+
+  // Don't flash if tab is already focused
+  if (document.visibilityState === "visible" && document.hasFocus()) {
+    // Just set preview briefly then restore
+    document.title = alertTitle;
+    clearTimeout(titleFlashTimer);
+    titleFlashTimer = setTimeout(() => { document.title = BASE_TITLE; }, 3000);
+    return;
+  }
+
+  // Tab is in background — flash between alert and preview
+  clearInterval(titleFlashTimer);
+  titleFlashCount = 0;
+  titleFlashTimer = setInterval(() => {
+    document.title = (titleFlashCount % 2 === 0) ? alertTitle : flashTitle;
+    titleFlashCount++;
+    if (titleFlashCount > 12) {           // stop after ~6 seconds
+      clearInterval(titleFlashTimer);
+      document.title = alertTitle;        // leave preview visible
+    }
+  }, 500);
+}
+
+function resetTitle() {
+  clearInterval(titleFlashTimer);
+  clearTimeout(titleFlashTimer);
+  document.title = BASE_TITLE;
+}
+
+// Reset title when user returns to the tab
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") resetTitle();
+});
+window.addEventListener("focus", resetTitle);
   authToken  = token;
   myId       = uid;
   myUsername = username;
@@ -418,10 +484,14 @@ async function loadMessages() {
   const latestKey = `${msgs[msgs.length-1].id}_${msgs[msgs.length-1].status}`;
   if (area.dataset.renderKey === latestKey) return;
 
-  // Check for new incoming messages to trigger sound
+  // Check for new incoming messages to trigger sound + title
   const newIncoming = msgs.filter(m => m.sender_id !== myId && m.id > lastIncomingMsgId);
   if (newIncoming.length > 0 && lastIncomingMsgId > 0) {
     playNotification();
+    // Show the latest new message in title bar
+    const latest     = newIncoming[newIncoming.length - 1];
+    const senderName = document.getElementById("other-name").textContent || "Someone";
+    notifyTitle(senderName, latest.body);
   }
   // Update tracker to highest incoming id seen
   const incomingIds = msgs.filter(m => m.sender_id !== myId).map(m => m.id);
@@ -522,6 +592,7 @@ document.getElementById("modal-confirm").addEventListener("click", async () => {
 
 document.getElementById("logout-btn").addEventListener("click", async () => {
   if (pollTimer) clearInterval(pollTimer);
+  resetTitle();
   await api("/logout", { method: "POST" }).catch(() => {});
   clearAuth();
   eraseHistoryAndRedirect();
@@ -572,6 +643,29 @@ function showLogin() {
   document.getElementById("password").value = "";
   document.getElementById("login-error").textContent = "";
 }
+
+// ── Mobile viewport height fix ─────────────────────────────────────────────────
+// On mobile, 100vh includes the browser chrome (address bar).
+// We set a --app-height CSS variable to the actual visible height,
+// and update it whenever the keyboard opens/closes or screen rotates.
+function setAppHeight() {
+  document.documentElement.style.setProperty("--app-height", window.innerHeight + "px");
+}
+setAppHeight();
+window.addEventListener("resize",      setAppHeight);
+window.addEventListener("orientationchange", () => setTimeout(setAppHeight, 200));
+
+// When input is focused on mobile, scroll chat to bottom so input stays visible
+document.getElementById("msg-input").addEventListener("focus", () => {
+  setTimeout(() => {
+    setAppHeight();
+    const area = document.getElementById("chat-area");
+    if (area) area.scrollTop = area.scrollHeight;
+  }, 350); // wait for keyboard animation
+});
+document.getElementById("msg-input").addEventListener("blur", () => {
+  setTimeout(setAppHeight, 300);
+});
 
 // ── Auto-login if token saved ──────────────────────────────────────────────────
 (async () => {
