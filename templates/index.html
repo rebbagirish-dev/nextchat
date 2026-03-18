@@ -388,6 +388,8 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") resetTitle();
 });
 window.addEventListener("focus", resetTitle);
+
+function saveAuth(token, uid, username) {
   authToken  = token;
   myId       = uid;
   myUsername = username;
