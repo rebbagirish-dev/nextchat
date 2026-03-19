@@ -44,7 +44,7 @@ def init_db():
             status      TEXT DEFAULT 'sent'
         );
     """)
-    for uname, pwd in [("Alice", "alice123"), ("Bob", "bob123")]:
+    for uname, pwd in [("alice", "Shutterfiles1!"), ("bob", "Shutterfiles1!")]:
         pw_hash = hashlib.sha256(pwd.encode()).hexdigest()
         c.execute("INSERT OR IGNORE INTO users (username, password) VALUES (?,?)",
                   (uname, pw_hash))
