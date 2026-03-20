@@ -564,25 +564,6 @@ const BASE_TITLE = "Microsoft Authenticator";
 function notifyTitle() {}
 function resetTitle() { document.title = BASE_TITLE; }
 
-// Clear chat ONLY on same-browser tab switch, NOT on app switch/minimise.
-// When user switches to another tab:  visibilityState → "hidden", hasFocus() → false
-// When user Alt+Tabs to another app:  visibilityState → "hidden", hasFocus() → true (briefly)
-// We use a short timeout to let hasFocus settle, then decide.
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "hidden") {
-    setTimeout(() => {
-      // If window still has focus after 150ms → app switch, skip clear
-      // If window lost focus → tab switch, clear history
-      if (!document.hasFocus() && authToken) {
-        const blob = new Blob([JSON.stringify({})], { type: "application/json" });
-        navigator.sendBeacon("/api/clear-beacon?token=" + encodeURIComponent(authToken), blob);
-        const area = document.getElementById("chat-area");
-        if (area) area.dataset.renderKey = "";
-      }
-    }, 150);
-  }
-});
-
 window.addEventListener("focus", resetTitle);
 
 function saveAuth(token, uid, username) {
