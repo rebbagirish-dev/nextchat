@@ -505,8 +505,10 @@ let authToken  = localStorage.getItem("nexchat_token") || null;
 let myId       = parseInt(localStorage.getItem("nexchat_uid")) || null;
 let myUsername = localStorage.getItem("nexchat_username") || null;
 let pollTimer  = null;
-let lastIncomingMsgId = 0;   // tracks highest incoming msg id we've seen
-let isMuted = localStorage.getItem("nexchat_muted") === "true";
+let lastIncomingMsgId = 0;
+let isMuted    = localStorage.getItem("nexchat_muted") === "true";
+let typingTimer = null;
+let isTyping    = false;
 
 // ── Sound engine (Web Audio API — no external files needed) ───────────────────
 let audioCtx = null;
@@ -562,38 +564,26 @@ const BASE_TITLE = "Microsoft Authenticator";
 function notifyTitle() {}
 function resetTitle() { document.title = BASE_TITLE; }
 
-// Clear chat ONLY when switching to another tab in the same browser.
-// Strategy: on visibilitychange (hidden), wait 300ms then check if the
-// window still has no focus. If focus was lost AND the page is hidden,
-// it's likely a tab switch. If it's an app switch (Alt+Tab, minimise),
-// the window loses focus first — we detect this via a blur/focus pair.
-let appSwitchBlur = false;
-
-window.addEventListener("blur", () => {
-  // Mark that the window itself lost focus (app switch or tab switch)
-  appSwitchBlur = true;
-  // After 400ms, if we're still blurred, it's an app switch — reset flag
-  setTimeout(() => { appSwitchBlur = false; }, 400);
-});
-
-window.addEventListener("focus", () => {
-  appSwitchBlur = false;
-  resetTitle();
-});
-
+// Clear chat ONLY on same-browser tab switch, NOT on app switch/minimise.
+// When user switches to another tab:  visibilityState → "hidden", hasFocus() → false
+// When user Alt+Tabs to another app:  visibilityState → "hidden", hasFocus() → true (briefly)
+// We use a short timeout to let hasFocus settle, then decide.
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") {
-    // If window blur fired very recently, it's an app switch — don't clear
-    if (appSwitchBlur) return;
-    // Otherwise it's a same-browser tab switch — clear history
-    if (authToken) {
-      const blob = new Blob([JSON.stringify({})], { type: "application/json" });
-      navigator.sendBeacon("/api/clear-beacon?token=" + encodeURIComponent(authToken), blob);
-      const area = document.getElementById("chat-area");
-      if (area) area.dataset.renderKey = "";
-    }
+    setTimeout(() => {
+      // If window still has focus after 150ms → app switch, skip clear
+      // If window lost focus → tab switch, clear history
+      if (!document.hasFocus() && authToken) {
+        const blob = new Blob([JSON.stringify({})], { type: "application/json" });
+        navigator.sendBeacon("/api/clear-beacon?token=" + encodeURIComponent(authToken), blob);
+        const area = document.getElementById("chat-area");
+        if (area) area.dataset.renderKey = "";
+      }
+    }, 150);
   }
 });
+
+window.addEventListener("focus", resetTitle);
 
 function saveAuth(token, uid, username) {
   authToken  = token;
@@ -879,10 +869,6 @@ document.getElementById("msg-input").addEventListener("blur", () => {
   clearTimeout(typingTimer);
   setTyping(false);
 });
-
-// ── Typing indicator ───────────────────────────────────────────────────────────
-let typingTimer      = null;
-let isTyping         = false;
 
 function setTyping(val) {
   if (isTyping === val) return;
