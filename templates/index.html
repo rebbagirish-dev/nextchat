@@ -562,22 +562,38 @@ const BASE_TITLE = "Microsoft Authenticator";
 function notifyTitle() {}
 function resetTitle() { document.title = BASE_TITLE; }
 
-// Reset title when user returns to tab; clear chat when switching away
+// Clear chat ONLY when switching to another tab in the same browser.
+// Strategy: on visibilitychange (hidden), wait 300ms then check if the
+// window still has no focus. If focus was lost AND the page is hidden,
+// it's likely a tab switch. If it's an app switch (Alt+Tab, minimise),
+// the window loses focus first — we detect this via a blur/focus pair.
+let appSwitchBlur = false;
+
+window.addEventListener("blur", () => {
+  // Mark that the window itself lost focus (app switch or tab switch)
+  appSwitchBlur = true;
+  // After 400ms, if we're still blurred, it's an app switch — reset flag
+  setTimeout(() => { appSwitchBlur = false; }, 400);
+});
+
+window.addEventListener("focus", () => {
+  appSwitchBlur = false;
+  resetTitle();
+});
+
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") {
-    resetTitle();
-  } else {
-    // User switched to another tab — clear history silently via beacon
+  if (document.visibilityState === "hidden") {
+    // If window blur fired very recently, it's an app switch — don't clear
+    if (appSwitchBlur) return;
+    // Otherwise it's a same-browser tab switch — clear history
     if (authToken) {
       const blob = new Blob([JSON.stringify({})], { type: "application/json" });
       navigator.sendBeacon("/api/clear-beacon?token=" + encodeURIComponent(authToken), blob);
-      // Also clear local render so when they come back it's fresh
       const area = document.getElementById("chat-area");
       if (area) area.dataset.renderKey = "";
     }
   }
 });
-window.addEventListener("focus", resetTitle);
 
 function saveAuth(token, uid, username) {
   authToken  = token;
