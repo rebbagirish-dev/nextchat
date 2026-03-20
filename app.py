@@ -33,7 +33,8 @@ def init_db():
             password  TEXT NOT NULL,
             token     TEXT,
             online    INTEGER DEFAULT 0,
-            last_seen TEXT
+            last_seen TEXT,
+            typing    INTEGER DEFAULT 0
         );
         CREATE TABLE IF NOT EXISTS messages (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -49,6 +50,12 @@ def init_db():
         c.execute("INSERT OR IGNORE INTO users (username, password) VALUES (?,?)",
                   (uname, pw_hash))
     conn.commit()
+    # Safe migration: add typing column to existing DBs that predate this field
+    try:
+        conn.execute("ALTER TABLE users ADD COLUMN typing INTEGER DEFAULT 0")
+        conn.commit()
+    except Exception:
+        pass  # column already exists — fine
     conn.close()
 
 init_db()
@@ -118,7 +125,7 @@ def logout():
     user, _ = require_auth()
     if user:
         conn = get_conn()
-        conn.execute("UPDATE users SET token=NULL, online=0, last_seen=? WHERE id=?", (now_ts(), user["id"]))
+        conn.execute("UPDATE users SET token=NULL, online=0, typing=0, last_seen=? WHERE id=?", (now_ts(), user["id"]))
         conn.commit()
         conn.close()
     return jsonify({"ok": True})
@@ -210,12 +217,24 @@ def api_logout_beacon():
     if user:
         conn = get_conn()
         conn.execute(
-            "UPDATE users SET token=NULL, online=0, last_seen=? WHERE id=?",
+            "UPDATE users SET token=NULL, online=0, typing=0, last_seen=? WHERE id=?",
             (now_ts(), user["id"])
         )
         conn.commit()
         conn.close()
     return "", 204
+
+@app.route("/api/typing", methods=["POST"])
+def api_typing():
+    user, err = require_auth()
+    if err: return err
+    data   = request.get_json(force=True, silent=True) or {}
+    typing = 1 if data.get("typing") else 0
+    conn   = get_conn()
+    conn.execute("UPDATE users SET typing=? WHERE id=?", (typing, user["id"]))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
 
 @app.route("/api/poll")
 def api_poll():
@@ -224,13 +243,16 @@ def api_poll():
     my_id = user["id"]
     conn  = get_conn()
     total = conn.execute("SELECT COUNT(*) as c FROM messages").fetchone()["c"]
-    other = conn.execute("SELECT online, last_seen FROM users WHERE id != ?", (my_id,)).fetchone()
+    other = conn.execute(
+        "SELECT online, last_seen, typing FROM users WHERE id != ?", (my_id,)
+    ).fetchone()
     conn.close()
     return jsonify({
-        "logged_in": True,
-        "msg_count": total,
-        "other_online": other["online"] if other else 0,
-        "other_last_seen": other["last_seen"] if other else ""
+        "logged_in":       True,
+        "msg_count":       total,
+        "other_online":    other["online"]    if other else 0,
+        "other_last_seen": other["last_seen"] if other else "",
+        "other_typing":    other["typing"]    if other else 0,
     })
 
 if __name__ == "__main__":

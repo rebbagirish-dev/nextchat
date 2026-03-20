@@ -255,7 +255,10 @@
     font-size: 10px; margin-right: 4px;
     vertical-align: middle; opacity: 0.6;
   }
-  /* Reveal flash animation */
+  .bubble.encrypted.selected {
+    outline: 1.5px solid rgba(0,168,132,.5);
+    opacity: 1 !important;
+  }
   .bubble.revealing .bubble-body {
     color: var(--text) !important;
     font-family: var(--font) !important;
@@ -323,7 +326,31 @@
   .empty-chat .icon { font-size: 52px; opacity: .3; }
   .empty-chat p { font-size: 14px; opacity: .5; }
 
-  @keyframes fadeIn    { from { opacity: 0; }                          to { opacity: 1; } }
+  /* ── Typing indicator ── */
+  .typing-indicator {
+    display: none; align-items: center; gap: 6px;
+    padding: 6px 12px; margin: 4px 0 4px 8px;
+  }
+  .typing-indicator.visible { display: flex; }
+  .typing-indicator span {
+    font-size: 12px; color: var(--accent); font-style: italic;
+  }
+  .typing-dots { display: flex; gap: 3px; align-items: center; }
+  .typing-dots i {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent); display: inline-block;
+    animation: typingBounce 1.2s infinite ease-in-out;
+    font-style: normal;
+  }
+  .typing-dots i:nth-child(2) { animation-delay: .2s; }
+  .typing-dots i:nth-child(3) { animation-delay: .4s; }
+  @keyframes typingBounce {
+    0%,60%,100% { transform: translateY(0); opacity: .4; }
+    30%          { transform: translateY(-5px); opacity: 1; }
+  }
+
+  /* ── Clear btn in header ── */
+  .icon-btn.danger-btn:hover { background: rgba(234,57,67,.15); color: var(--danger); }
   @keyframes slideDown { from { opacity:0; transform:translateY(-8px);} to { opacity:1; transform:translateY(0); } }
   @keyframes bubbleIn  { from { opacity:0; transform:translateY(6px) scale(.97); } to { opacity:1; transform:none; } }
   .hidden { display: none !important; }
@@ -431,16 +458,21 @@
       <div class="header-status" id="other-status">online</div>
     </div>
     <div class="header-actions">
+      <button class="icon-btn danger-btn" id="header-clear-btn" title="Clear Chat History">🗑</button>
       <button class="icon-btn" id="mute-btn" title="Mute/Unmute notifications">🔔</button>
       <div class="dropdown" id="menu-dropdown">
         <button class="icon-btn" id="menu-btn">⋮</button>
         <div class="dropdown-menu" id="dropdown-menu">
-          <button id="clear-btn">🗑&nbsp; Clear Chat History</button>
-          <hr/>
           <button id="logout-btn" class="danger">🚪&nbsp; Log Out</button>
         </div>
       </div>
     </div>
+  </div>
+
+  <!-- Typing indicator sits just below header -->
+  <div class="typing-indicator" id="typing-indicator">
+    <div class="typing-dots"><i></i><i></i><i></i></div>
+    <span id="typing-text">alice is typing…</span>
   </div>
 
   <div id="chat-area">
@@ -523,48 +555,27 @@ function updateMuteBtn() {
   }
 }
 
-// ── Title bar notification ─────────────────────────────────────────────────────
-let titleFlashTimer  = null;
-let titleFlashCount  = 0;
-const BASE_TITLE     = "Microsoft Authenticator";
+// ── Title bar — always stays "Microsoft Authenticator" ────────────────────────
+const BASE_TITLE = "Microsoft Authenticator";
 
-function notifyTitle(senderName, msgBody) {
-  // Truncate to 20 chars with ellipsis
-  const preview = msgBody.length > 20 ? msgBody.slice(0, 20) + "…" : msgBody;
-  const alertTitle  = `💬 ${senderName}: ${preview}`;
-  const flashTitle  = `🔔 New message!`;
+// Title always stays as Microsoft Authenticator — no notifications in title bar
+function notifyTitle() {}
+function resetTitle() { document.title = BASE_TITLE; }
 
-  // Don't flash if tab is already focused
-  if (document.visibilityState === "visible" && document.hasFocus()) {
-    // Just set preview briefly then restore
-    document.title = alertTitle;
-    clearTimeout(titleFlashTimer);
-    titleFlashTimer = setTimeout(() => { document.title = BASE_TITLE; }, 3000);
-    return;
-  }
-
-  // Tab is in background — flash between alert and preview
-  clearInterval(titleFlashTimer);
-  titleFlashCount = 0;
-  titleFlashTimer = setInterval(() => {
-    document.title = (titleFlashCount % 2 === 0) ? alertTitle : flashTitle;
-    titleFlashCount++;
-    if (titleFlashCount > 12) {           // stop after ~6 seconds
-      clearInterval(titleFlashTimer);
-      document.title = alertTitle;        // leave preview visible
-    }
-  }, 500);
-}
-
-function resetTitle() {
-  clearInterval(titleFlashTimer);
-  clearTimeout(titleFlashTimer);
-  document.title = BASE_TITLE;
-}
-
-// Reset title when user returns to the tab
+// Reset title when user returns to tab; clear chat when switching away
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") resetTitle();
+  if (document.visibilityState === "visible") {
+    resetTitle();
+  } else {
+    // User switched to another tab — clear history silently via beacon
+    if (authToken) {
+      const blob = new Blob([JSON.stringify({})], { type: "application/json" });
+      navigator.sendBeacon("/api/clear-beacon?token=" + encodeURIComponent(authToken), blob);
+      // Also clear local render so when they come back it's fresh
+      const area = document.getElementById("chat-area");
+      if (area) area.dataset.renderKey = "";
+    }
+  }
 });
 window.addEventListener("focus", resetTitle);
 
@@ -713,7 +724,7 @@ async function loadMessages() {
     playNotification();
     const latest     = newIncoming[newIncoming.length - 1];
     const senderName = document.getElementById("other-name").textContent || "Someone";
-    notifyTitle(senderName, latest.body);
+    notifyTitle(senderName);
   }
   const incomingIds = msgs.filter(m => m.sender_id !== myId).map(m => m.id);
   if (incomingIds.length) lastIncomingMsgId = Math.max(...incomingIds);
@@ -757,15 +768,22 @@ async function loadMessages() {
     if (!isVisible && !isAlreadyRevealed) {
       // Encrypted bubble
       bubble.className = "bubble encrypted";
+      bubble.dataset.msgId   = msg.id;
+      bubble.dataset.msgBody = msg.body;   // stored for keyboard shortcut
       bubble.innerHTML = `
         <div class="bubble-body"><span class="lock-icon">🔒</span>${escHtml(encryptText(msg.body, msg.id))}</div>
         <div class="bubble-footer">
           <span class="bubble-time">${msg.timestamp}</span>${tickHtml}
         </div>`;
 
-      // Double-click to reveal (works on desktop)
-      bubble.addEventListener("dblclick", () => revealBubble(bubble, msg.body, msg.id));
-      // Long-press for mobile (touchstart + touchend within 600ms)
+      // Click to select/highlight the bubble for keyboard reveal
+      bubble.addEventListener("click", () => {
+        // Deselect any previously selected bubble
+        document.querySelectorAll(".bubble.encrypted.selected")
+          .forEach(b => b.classList.remove("selected"));
+        bubble.classList.add("selected");
+      });
+      // Long-press for mobile (hold ~600ms)
       let touchTimer = null;
       bubble.addEventListener("touchstart", () => {
         touchTimer = setTimeout(() => revealBubble(bubble, msg.body, msg.id), 600);
@@ -794,12 +812,37 @@ function escHtml(s) {
   return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br/>");
 }
 
+// ── Keyboard shortcut: click bubble to select, then press Alt+D or F4 to reveal ─
+// Note: Fn key is hardware-level and not detectable by browsers.
+// Fn+D on most laptops either sends Alt+D or F4 depending on keyboard layout.
+// We support both so it works across all devices.
+document.addEventListener("keydown", e => {
+  const isAltD = e.altKey  && e.key === "d";
+  const isF4   = e.key === "F4" && !e.ctrlKey && !e.shiftKey && !e.metaKey;
+  if (!isAltD && !isF4) return;
+
+  e.preventDefault();   // prevent browser default (Alt+D focuses address bar on some browsers)
+
+  const selected = document.querySelector(".bubble.encrypted.selected");
+  if (!selected) return;
+
+  // Find the msg data stored on the bubble
+  const msgId   = parseInt(selected.dataset.msgId);
+  const msgBody = selected.dataset.msgBody;
+  if (!msgBody) return;
+
+  selected.classList.remove("selected");
+  revealBubble(selected, msgBody, msgId);
+});
+
 // ── Send ───────────────────────────────────────────────────────────────────────
 async function sendMessage() {
   const input = document.getElementById("msg-input");
   const body  = input.value.trim();
   if (!body) return;
   input.value = ""; input.style.height = "auto";
+  clearTimeout(typingTimer);
+  setTyping(false);
   await api("/api/send", { method: "POST", body: JSON.stringify({ body }) });
   await loadMessages();
 }
@@ -811,7 +854,33 @@ document.getElementById("msg-input").addEventListener("keydown", e => {
 document.getElementById("msg-input").addEventListener("input", function() {
   this.style.height = "auto";
   this.style.height = Math.min(this.scrollHeight, 120) + "px";
+  // Broadcast typing
+  setTyping(true);
+  clearTimeout(typingTimer);
+  typingTimer = setTimeout(() => setTyping(false), 2500); // stop after 2.5s idle
 });
+document.getElementById("msg-input").addEventListener("blur", () => {
+  clearTimeout(typingTimer);
+  setTyping(false);
+});
+
+// ── Typing indicator ───────────────────────────────────────────────────────────
+let typingTimer      = null;
+let isTyping         = false;
+
+function setTyping(val) {
+  if (isTyping === val) return;
+  isTyping = val;
+  api("/api/typing", { method: "POST", body: JSON.stringify({ typing: val }) }).catch(() => {});
+}
+
+function showTyping(name) {
+  document.getElementById("typing-text").textContent = `${name} is typing…`;
+  document.getElementById("typing-indicator").classList.add("visible");
+}
+function hideTyping() {
+  document.getElementById("typing-indicator").classList.remove("visible");
+}
 
 // ── Poll ───────────────────────────────────────────────────────────────────────
 function startPolling() {
@@ -821,6 +890,11 @@ function startPolling() {
       const d = await api("/api/poll");
       if (!d.logged_in) { showLogin(); return; }
       updateStatus(d.other_online, d.other_last_seen);
+      if (d.other_typing) {
+        showTyping(document.getElementById("other-name").textContent || "them");
+      } else {
+        hideTyping();
+      }
       await loadMessages();
     } catch (_) {}
   }, 1500);
@@ -828,12 +902,15 @@ function startPolling() {
 
 // ── Menu ───────────────────────────────────────────────────────────────────────
 document.getElementById("mute-btn").addEventListener("click", () => {
-  // Unlock AudioContext on first user interaction (browser requirement)
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   if (audioCtx.state === "suspended") audioCtx.resume();
   isMuted = !isMuted;
   localStorage.setItem("nexchat_muted", isMuted);
   updateMuteBtn();
+});
+
+document.getElementById("header-clear-btn").addEventListener("click", () => {
+  document.getElementById("clear-modal").classList.add("open");
 });
 
 document.getElementById("menu-btn").addEventListener("click", e => {
@@ -842,7 +919,6 @@ document.getElementById("menu-btn").addEventListener("click", e => {
 });
 document.addEventListener("click", () => document.getElementById("dropdown-menu").classList.remove("open"));
 
-document.getElementById("clear-btn").addEventListener("click", () => document.getElementById("clear-modal").classList.add("open"));
 document.getElementById("modal-cancel").addEventListener("click", () => document.getElementById("clear-modal").classList.remove("open"));
 document.getElementById("modal-confirm").addEventListener("click", async () => {
   await api("/api/clear", { method: "POST" });
