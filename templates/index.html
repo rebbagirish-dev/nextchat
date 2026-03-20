@@ -237,6 +237,38 @@
   .tick          { font-size: 13px; color: var(--tick-grey); line-height: 1; }
   .tick.read     { color: var(--tick-blue); }
 
+  /* ── Encrypted message styles ── */
+  .bubble.encrypted .bubble-body {
+    font-family: monospace;
+    color: rgba(134,150,160,0.55);
+    font-size: 12.5px;
+    letter-spacing: 1px;
+    user-select: none;
+    cursor: pointer;
+  }
+  .bubble.encrypted {
+    opacity: 0.72;
+    border: 1px solid rgba(255,255,255,0.04);
+  }
+  .bubble.encrypted .bubble-footer { opacity: 0.5; }
+  .bubble.encrypted .lock-icon {
+    font-size: 10px; margin-right: 4px;
+    vertical-align: middle; opacity: 0.6;
+  }
+  /* Reveal flash animation */
+  .bubble.revealing .bubble-body {
+    color: var(--text) !important;
+    font-family: var(--font) !important;
+    font-size: 14.2px !important;
+    letter-spacing: normal !important;
+    animation: revealFlash .25s ease;
+  }
+  .bubble.revealing { opacity: 1 !important; }
+  @keyframes revealFlash {
+    0%   { opacity: 0; transform: scale(.97); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+
   .input-bar {
     background: var(--bg-input-bar); display: flex; align-items: center;
     padding: 8px 16px; gap: 10px; border-top: 1px solid var(--divider); flex-shrink: 0;
@@ -339,7 +371,7 @@
       </svg>
     </div>
 
-    <div class="login-title">Microsoft SecureAuth</div>
+    <div class="login-title">SecureAuth</div>
     <div class="login-sub">Identity Verification Portal</div>
 
     <div class="security-badges">
@@ -619,6 +651,48 @@ function updateStatus(online, lastSeen) {
   else        { el.textContent = lastSeen ? `last seen ${lastSeen}` : "offline"; el.classList.add("offline"); }
 }
 
+// ── Encryption helpers ─────────────────────────────────────────────────────────
+
+// Deterministic-looking cipher: same input always gives same encrypted output
+// so bubbles don't flicker on re-render
+function encryptText(text, msgId) {
+  // Use msgId as seed so each message has unique but stable ciphertext
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+  let result = "";
+  let seed   = msgId * 2654435761;        // Knuth multiplicative hash
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === " ") { result += " "; continue; }
+    if (ch === "\n"){ result += "\n"; continue; }
+    seed = (seed ^ (seed >>> 15)) * 2246822519;
+    seed = (seed ^ (seed >>> 13)) * 3266489917;
+    seed = seed ^ (seed >>> 16);
+    result += chars[Math.abs(seed) % chars.length];
+  }
+  return result;
+}
+
+// Track which messages are currently being revealed
+const revealedMsgs = new Set();
+
+function revealBubble(bubble, originalText, msgId) {
+  if (revealedMsgs.has(msgId)) return;
+  revealedMsgs.add(msgId);
+
+  const bodyEl = bubble.querySelector(".bubble-body");
+  bubble.classList.remove("encrypted");
+  bubble.classList.add("revealing");
+  bodyEl.innerHTML = escHtml(originalText);
+
+  // Re-encrypt after 2.5 seconds
+  setTimeout(() => {
+    revealedMsgs.delete(msgId);
+    bubble.classList.remove("revealing");
+    bubble.classList.add("encrypted");
+    bodyEl.innerHTML = `<span class="lock-icon">🔒</span>${escHtml(encryptText(originalText, msgId))}`;
+  }, 2500);
+}
+
 // ── Messages ───────────────────────────────────────────────────────────────────
 async function loadMessages() {
   const msgs = await api("/api/messages").catch(() => []);
@@ -637,12 +711,10 @@ async function loadMessages() {
   const newIncoming = msgs.filter(m => m.sender_id !== myId && m.id > lastIncomingMsgId);
   if (newIncoming.length > 0 && lastIncomingMsgId > 0) {
     playNotification();
-    // Show the latest new message in title bar
     const latest     = newIncoming[newIncoming.length - 1];
     const senderName = document.getElementById("other-name").textContent || "Someone";
     notifyTitle(senderName, latest.body);
   }
-  // Update tracker to highest incoming id seen
   const incomingIds = msgs.filter(m => m.sender_id !== myId).map(m => m.id);
   if (incomingIds.length) lastIncomingMsgId = Math.max(...incomingIds);
 
@@ -655,9 +727,22 @@ async function loadMessages() {
   div.className = "date-divider"; div.innerHTML = "<span>Today</span>";
   area.appendChild(div);
 
-  msgs.forEach(msg => {
-    const isMe = (msg.sender_id === myId);
-    const row  = document.createElement("div");
+  // Find last message from me and last message from other — these stay visible
+  let lastMeIdx    = -1;
+  let lastThemIdx  = -1;
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    if (lastMeIdx   === -1 && msgs[i].sender_id === myId)  lastMeIdx   = i;
+    if (lastThemIdx === -1 && msgs[i].sender_id !== myId)  lastThemIdx = i;
+    if (lastMeIdx !== -1 && lastThemIdx !== -1) break;
+  }
+  const visibleIndices = new Set([lastMeIdx, lastThemIdx].filter(i => i !== -1));
+
+  msgs.forEach((msg, idx) => {
+    const isMe      = (msg.sender_id === myId);
+    const isVisible = visibleIndices.has(idx);
+    const isAlreadyRevealed = revealedMsgs.has(msg.id);
+
+    const row = document.createElement("div");
     row.className = `msg-row ${isMe ? "me" : "them"}`;
 
     let tickHtml = "";
@@ -667,12 +752,38 @@ async function loadMessages() {
       else                                 tickHtml = `<span class="tick" title="Sent">✓</span>`;
     }
 
-    row.innerHTML = `<div class="bubble">
-      <div class="bubble-body">${escHtml(msg.body)}</div>
-      <div class="bubble-footer">
-        <span class="bubble-time">${msg.timestamp}</span>${tickHtml}
-      </div>
-    </div>`;
+    const bubble = document.createElement("div");
+
+    if (!isVisible && !isAlreadyRevealed) {
+      // Encrypted bubble
+      bubble.className = "bubble encrypted";
+      bubble.innerHTML = `
+        <div class="bubble-body"><span class="lock-icon">🔒</span>${escHtml(encryptText(msg.body, msg.id))}</div>
+        <div class="bubble-footer">
+          <span class="bubble-time">${msg.timestamp}</span>${tickHtml}
+        </div>`;
+
+      // Double-click to reveal (works on desktop)
+      bubble.addEventListener("dblclick", () => revealBubble(bubble, msg.body, msg.id));
+      // Long-press for mobile (touchstart + touchend within 600ms)
+      let touchTimer = null;
+      bubble.addEventListener("touchstart", () => {
+        touchTimer = setTimeout(() => revealBubble(bubble, msg.body, msg.id), 600);
+      }, { passive: true });
+      bubble.addEventListener("touchend",   () => clearTimeout(touchTimer), { passive: true });
+      bubble.addEventListener("touchmove",  () => clearTimeout(touchTimer), { passive: true });
+
+    } else {
+      // Clear bubble (last message from each side, or currently revealed)
+      bubble.className = isAlreadyRevealed ? "bubble revealing" : "bubble";
+      bubble.innerHTML = `
+        <div class="bubble-body">${escHtml(msg.body)}</div>
+        <div class="bubble-footer">
+          <span class="bubble-time">${msg.timestamp}</span>${tickHtml}
+        </div>`;
+    }
+
+    row.appendChild(bubble);
     area.appendChild(row);
   });
 
