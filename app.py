@@ -193,7 +193,7 @@ def api_clear():
     user, err = require_auth()
     if err: return err
     conn = get_conn()
-    conn.execute("DELETE FROM messages")
+    conn.execute("DELETE FROM messages WHERE status='read'")
     conn.commit()
     conn.close()
     return jsonify({"ok": True})
@@ -205,7 +205,7 @@ def api_clear_beacon():
     user  = get_user_by_token(token)
     if user:
         conn = get_conn()
-        conn.execute("DELETE FROM messages")
+        conn.execute("DELETE FROM messages WHERE status='read'")
         conn.commit()
         conn.close()
     return "", 204
