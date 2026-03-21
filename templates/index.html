@@ -354,23 +354,23 @@
   .reply-quote-name { color: var(--accent); font-weight: 600; font-size: 11px; margin-bottom: 2px; }
   .reply-quote-body { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
 
-  /* Reply button — always visible, sits outside the bubble */
-  .bubble-wrap { position: relative; display: flex; align-items: center; max-width: 75%; }
+  /* Reply button — always visible on touch, hover-stable on desktop */
+  .bubble-wrap { position: relative; display: flex; align-items: center; max-width: 75%; gap: 0; }
   .msg-row.me   .bubble-wrap { flex-direction: row-reverse; }
   .msg-row.them .bubble-wrap { flex-direction: row; }
 
   .reply-btn {
-    background: none; border: none; font-size: 17px; cursor: pointer;
-    padding: 4px 6px; border-radius: 50%; color: var(--text-sub);
+    background: none; border: none; font-size: 16px; cursor: pointer;
+    /* Generous padding creates invisible area bridging any gap to the bubble */
+    padding: 10px 12px;
+    border-radius: 50%; color: var(--text-sub);
     opacity: 0; pointer-events: none;
-    transition: opacity .15s, background .15s;
+    transition: opacity .15s, color .15s;
     flex-shrink: 0; align-self: center;
   }
-  .bubble-wrap:hover .reply-btn,
-  .bubble-wrap.show-reply .reply-btn {
-    opacity: 1; pointer-events: auto;
-  }
-  .reply-btn:hover { background: var(--hover); color: var(--accent); }
+  /* Hover on the WRAP (not just the button) keeps it visible as cursor moves across */
+  .bubble-wrap:hover .reply-btn { opacity: 1; pointer-events: auto; }
+  .reply-btn:hover { color: var(--accent); }
 
   /* On touch devices — always show reply button */
   @media (hover: none) {
