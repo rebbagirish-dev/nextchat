@@ -834,6 +834,7 @@ async function loadMessages() {
     }
 
     row.appendChild(bubble);
+    area.appendChild(row);
   });
 
   if (atBottom || !area.dataset.renderKey) area.scrollTop = area.scrollHeight;
