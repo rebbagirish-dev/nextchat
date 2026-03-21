@@ -354,18 +354,28 @@
   .reply-quote-name { color: var(--accent); font-weight: 600; font-size: 11px; margin-bottom: 2px; }
   .reply-quote-body { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
 
-  /* Hover action bar on bubbles */
-  .bubble-wrap { position: relative; display: inline-block; max-width: 100%; }
-  .bubble-actions {
-    display: none; position: absolute; top: 50%; transform: translateY(-50%);
-    background: #2a3942; border-radius: 20px; padding: 3px 6px;
-    gap: 2px; box-shadow: 0 2px 8px rgba(0,0,0,.3); z-index: 10;
+  /* Reply button — always visible, sits outside the bubble */
+  .bubble-wrap { position: relative; display: flex; align-items: center; max-width: 75%; }
+  .msg-row.me   .bubble-wrap { flex-direction: row-reverse; }
+  .msg-row.them .bubble-wrap { flex-direction: row; }
+
+  .reply-btn {
+    background: none; border: none; font-size: 17px; cursor: pointer;
+    padding: 4px 6px; border-radius: 50%; color: var(--text-sub);
+    opacity: 0; pointer-events: none;
+    transition: opacity .15s, background .15s;
+    flex-shrink: 0; align-self: center;
   }
-  .msg-row.me   .bubble-actions { right: calc(100% + 6px); left: auto; }
-  .msg-row.them .bubble-actions { left: calc(100% + 6px); right: auto; }
-  .bubble-wrap:hover .bubble-actions { display: flex; }
-  .bubble-action-btn { background: none; border: none; font-size: 14px; cursor: pointer; padding: 2px 4px; border-radius: 4px; }
-  .bubble-action-btn:hover { background: var(--hover); }
+  .bubble-wrap:hover .reply-btn,
+  .bubble-wrap.show-reply .reply-btn {
+    opacity: 1; pointer-events: auto;
+  }
+  .reply-btn:hover { background: var(--hover); color: var(--accent); }
+
+  /* On touch devices — always show reply button */
+  @media (hover: none) {
+    .reply-btn { opacity: 1; pointer-events: auto; }
+  }
 
   .modal-overlay {
     display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6);
@@ -430,7 +440,8 @@
 
   /* ── Mobile fixes ── */
   @media (max-width: 480px) {
-    .bubble       { max-width: 82%; }
+    .bubble       { max-width: 100%; }
+    .bubble-wrap  { max-width: 88%; }
     .login-card   { width: 92%; padding: 32px 24px; }
     #chat-area    { padding: 10px 3%; }
     .chat-header  { padding: 6px 10px; }
@@ -859,36 +870,39 @@ async function loadMessages() {
         <div class="reply-quote-body">${escHtml(msg.reply_to_body.replace(/[*_~]/g,"")).substring(0,80)}</div>
       </div>` : "";
 
-    // Reply action button (shown on hover)
-    const replyBtn = `<button class="bubble-action-btn" title="Reply" data-msg-id="${msg.id}" data-msg-body="${escAttr(msg.body)}" data-msg-name="${escAttr(isMe ? myUsername : (document.getElementById('other-name').textContent||'them'))}">↩</button>`;
+    // Reply button
+    const replyBtn = document.createElement("button");
+    replyBtn.className = "reply-btn";
+    replyBtn.title = "Reply";
+    replyBtn.textContent = "↩";
+    replyBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const name = isMe ? myUsername : (document.getElementById("other-name").textContent || "them");
+      setReply(msg.id, msg.body, name);
+    });
 
     if (!isVisible && !isAlreadyRevealed) {
       bubble.className = "bubble encrypted";
       bubble.dataset.msgId   = msg.id;
       bubble.dataset.msgBody = msg.body;
-      const wrap = document.createElement("div");
-      wrap.className = "bubble-wrap";
-      wrap.innerHTML = `<div class="bubble-actions">${replyBtn}</div>`;
       bubble.innerHTML = `
         ${replyHtml}
         <div class="bubble-body"><span class="lock-icon">🔒</span>${escHtml(encryptText(msg.body, msg.id))}</div>
         <div class="bubble-footer">
           <span class="bubble-time">${msg.timestamp}</span>${tickHtml}
         </div>`;
-      wrap.appendChild(bubble);
-      // Touch long-press
+      // Touch long-press to reveal
       let touchTimer = null;
       bubble.addEventListener("touchstart", () => {
         touchTimer = setTimeout(() => revealBubble(bubble, msg.body, msg.id), 600);
       }, { passive: true });
       bubble.addEventListener("touchend",  () => clearTimeout(touchTimer), { passive: true });
       bubble.addEventListener("touchmove", () => clearTimeout(touchTimer), { passive: true });
-      // Click to select
+      // Click to select for keyboard decrypt
       bubble.addEventListener("click", () => {
         document.querySelectorAll(".bubble.encrypted.selected").forEach(b => b.classList.remove("selected"));
         bubble.classList.add("selected");
       });
-      row.appendChild(wrap);
     } else {
       bubble.className = isAlreadyRevealed ? "bubble revealing" : "bubble";
       bubble.innerHTML = `
@@ -897,13 +911,13 @@ async function loadMessages() {
         <div class="bubble-footer">
           <span class="bubble-time">${msg.timestamp}</span>${tickHtml}
         </div>`;
-      const wrap = document.createElement("div");
-      wrap.className = "bubble-wrap";
-      wrap.innerHTML = `<div class="bubble-actions">${replyBtn}</div>`;
-      wrap.appendChild(bubble);
-      row.appendChild(wrap);
     }
-    area.appendChild(row);
+
+    const wrap = document.createElement("div");
+    wrap.className = "bubble-wrap";
+    wrap.appendChild(bubble);
+    wrap.appendChild(replyBtn);
+    row.appendChild(wrap);
   });
 
   if (atBottom || !area.dataset.renderKey) area.scrollTop = area.scrollHeight;
@@ -915,16 +929,6 @@ function escHtml(s) {
 function escAttr(s) {
   return String(s||"").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
 }
-
-// Reply button click delegation
-document.getElementById("chat-area").addEventListener("click", e => {
-  const btn = e.target.closest(".bubble-action-btn");
-  if (!btn) return;
-  const msgId   = parseInt(btn.dataset.msgId);
-  const msgBody = btn.dataset.msgBody;
-  const msgName = btn.dataset.msgName;
-  if (msgId && msgBody) setReply(msgId, msgBody, msgName);
-});
 
 // ── Keyboard shortcut: click bubble to select, then press Alt+D or F4 to reveal ─
 // Note: Fn key is hardware-level and not detectable by browsers.
