@@ -226,8 +226,9 @@
   .msg-row.them { justify-content: flex-start; }
 
   .bubble {
-    max-width: 65%; padding: 7px 10px 6px; border-radius: 7.5px;
+    padding: 7px 10px 6px; border-radius: 7.5px;
     position: relative; word-break: break-word; line-height: 1.45;
+    min-width: 60px; flex: 1;
   }
   .msg-row.me   .bubble { background: var(--bg-me);   border-bottom-right-radius: 2px; }
   .msg-row.them .bubble { background: var(--bg-them); border-bottom-left-radius: 2px; }
@@ -440,8 +441,7 @@
 
   /* ── Mobile fixes ── */
   @media (max-width: 480px) {
-    .bubble       { max-width: 100%; }
-    .bubble-wrap  { max-width: 88%; }
+    .bubble-wrap  { max-width: 92%; }
     .login-card   { width: 92%; padding: 32px 24px; }
     #chat-area    { padding: 10px 3%; }
     .chat-header  { padding: 6px 10px; }
