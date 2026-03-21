@@ -42,7 +42,10 @@ def init_db():
             receiver_id INTEGER NOT NULL,
             body        TEXT NOT NULL,
             timestamp   TEXT NOT NULL,
-            status      TEXT DEFAULT 'sent'
+            status      TEXT DEFAULT 'sent',
+            reply_to_id INTEGER DEFAULT NULL,
+            reply_to_body TEXT DEFAULT NULL,
+            reply_to_name TEXT DEFAULT NULL
         );
     """)
     for uname, pwd in [("alice", "Shutterflies1!"), ("bob", "Shutterflies1!")]:
@@ -55,7 +58,14 @@ def init_db():
         conn.execute("ALTER TABLE users ADD COLUMN typing INTEGER DEFAULT 0")
         conn.commit()
     except Exception:
-        pass  # column already exists — fine
+        pass
+    try:
+        conn.execute("ALTER TABLE messages ADD COLUMN reply_to_id INTEGER DEFAULT NULL")
+        conn.execute("ALTER TABLE messages ADD COLUMN reply_to_body TEXT DEFAULT NULL")
+        conn.execute("ALTER TABLE messages ADD COLUMN reply_to_name TEXT DEFAULT NULL")
+        conn.commit()
+    except Exception:
+        pass  # columns already exist
     conn.close()
 
 init_db()
@@ -161,7 +171,8 @@ def api_messages():
     conn.execute("UPDATE messages SET status='read' WHERE sender_id=? AND receiver_id=? AND status='delivered'", (other_id, my_id))
     conn.commit()
     rows = conn.execute("""
-        SELECT id, sender_id, body, timestamp, status FROM messages
+        SELECT id, sender_id, body, timestamp, status,
+               reply_to_id, reply_to_body, reply_to_name FROM messages
         WHERE (sender_id=? AND receiver_id=?) OR (sender_id=? AND receiver_id=?)
         ORDER BY id ASC
     """, (my_id, other_id, other_id, my_id)).fetchall()
@@ -176,14 +187,19 @@ def api_send():
     body = data.get("body", "").strip()
     if not body:
         return jsonify({"ok": False, "error": "Empty message"})
-    my_id = user["id"]
+    my_id        = user["id"]
+    reply_to_id  = data.get("reply_to_id")
+    reply_to_body= data.get("reply_to_body", "")
+    reply_to_name= data.get("reply_to_name", "")
     conn  = get_conn()
     other = conn.execute("SELECT id FROM users WHERE id != ?", (my_id,)).fetchone()
     if not other:
         conn.close()
         return jsonify({"ok": False})
-    conn.execute("INSERT INTO messages (sender_id,receiver_id,body,timestamp,status) VALUES (?,?,?,?,'sent')",
-                 (my_id, other["id"], body, now_ts()))
+    conn.execute(
+        "INSERT INTO messages (sender_id,receiver_id,body,timestamp,status,reply_to_id,reply_to_body,reply_to_name) VALUES (?,?,?,?,'sent',?,?,?)",
+        (my_id, other["id"], body, now_ts(), reply_to_id, reply_to_body, reply_to_name)
+    )
     conn.commit()
     conn.close()
     return jsonify({"ok": True})

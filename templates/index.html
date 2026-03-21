@@ -273,26 +273,99 @@
   }
 
   .input-bar {
-    background: var(--bg-input-bar); display: flex; align-items: center;
-    padding: 8px 16px; gap: 10px; border-top: 1px solid var(--divider); flex-shrink: 0;
-    /* iOS home bar / notch safe area */
-    padding-bottom: max(8px, env(safe-area-inset-bottom));
+    background: var(--bg-input-bar);
+    border-top: 1px solid var(--divider); flex-shrink: 0;
+    padding-bottom: max(4px, env(safe-area-inset-bottom));
+    display: flex; flex-direction: column;
+  }
+
+  /* Reply preview strip */
+  .reply-bar {
+    display: none; align-items: center; gap: 8px;
+    padding: 6px 14px 0;
+    border-left: 3px solid var(--accent);
+    margin: 6px 14px 0;
+    background: rgba(0,168,132,.06);
+    border-radius: 6px 6px 0 0;
+  }
+  .reply-bar.visible { display: flex; }
+  .reply-bar-text { flex: 1; font-size: 12px; color: var(--text-sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .reply-bar-label { font-size: 11px; color: var(--accent); font-weight: 600; margin-bottom: 1px; display: block; }
+  .reply-cancel { background: none; border: none; color: var(--text-sub); font-size: 18px; cursor: pointer; line-height: 1; padding: 0 2px; }
+  .reply-cancel:hover { color: var(--danger); }
+
+  /* Formatting toolbar */
+  .fmt-toolbar {
+    display: flex; align-items: center; gap: 2px;
+    padding: 4px 14px 0;
+  }
+  .fmt-btn {
+    background: none; border: none; color: var(--text-sub);
+    font-size: 13px; font-weight: 700; cursor: pointer;
+    padding: 3px 7px; border-radius: 4px;
+    transition: background .15s, color .15s;
+    line-height: 1.4;
+  }
+  .fmt-btn:hover  { background: var(--hover); color: var(--text); }
+  .fmt-btn.active { background: rgba(0,168,132,.18); color: var(--accent); }
+  .fmt-sep { width: 1px; height: 14px; background: var(--divider); margin: 0 4px; }
+
+  /* Input row */
+  .input-row {
+    display: flex; align-items: flex-end;
+    padding: 6px 10px 6px 14px; gap: 8px;
   }
   #msg-input {
-    flex: 1; background: var(--bg-input); border: none; border-radius: 24px;
-    padding: 10px 18px; font-family: var(--font); font-size: 16px; /* 16px prevents iOS zoom */
+    flex: 1; background: var(--bg-input); border: none; border-radius: 18px;
+    padding: 9px 14px; font-family: var(--font); font-size: 16px;
     color: var(--text); outline: none; resize: none; max-height: 120px; overflow-y: auto;
     line-height: 1.45; -webkit-appearance: none;
   }
   #msg-input::placeholder { color: var(--text-sub); }
   .send-btn {
-    width: 44px; height: 44px; border-radius: 50%; background: var(--accent);
-    border: none; color: #fff; font-size: 18px; cursor: pointer;
+    width: 42px; height: 42px; border-radius: 50%; background: var(--accent);
+    border: none; color: #fff; font-size: 17px; cursor: pointer;
     display: flex; align-items: center; justify-content: center;
     transition: background .2s, transform .1s; flex-shrink: 0;
   }
   .send-btn:hover  { background: var(--accent-light); }
   .send-btn:active { transform: scale(.9); }
+
+  /* Emoji picker */
+  .emoji-picker {
+    display: none; position: absolute; bottom: 100%; left: 0; right: 0;
+    background: #1a2730; border-top: 1px solid var(--divider);
+    padding: 8px; max-height: 220px; overflow-y: auto;
+    flex-wrap: wrap; gap: 2px; z-index: 50;
+  }
+  .emoji-picker.open { display: flex; }
+  .emoji-picker::-webkit-scrollbar { width: 4px; }
+  .emoji-picker::-webkit-scrollbar-thumb { background: #374045; border-radius: 4px; }
+  .emoji-cat { width: 100%; font-size: 10px; color: var(--text-sub); padding: 4px 2px 2px; letter-spacing: .5px; text-transform: uppercase; }
+  .emoji-btn { font-size: 22px; padding: 4px; cursor: pointer; border-radius: 4px; border: none; background: none; transition: background .1s; line-height: 1; }
+  .emoji-btn:hover { background: var(--hover); }
+
+  /* Reply quote inside bubble */
+  .reply-quote {
+    background: rgba(0,0,0,.2); border-left: 3px solid var(--accent);
+    border-radius: 4px; padding: 4px 8px; margin-bottom: 4px;
+    font-size: 12px; color: var(--text-sub);
+  }
+  .reply-quote-name { color: var(--accent); font-weight: 600; font-size: 11px; margin-bottom: 2px; }
+  .reply-quote-body { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+
+  /* Hover action bar on bubbles */
+  .bubble-wrap { position: relative; display: inline-block; max-width: 100%; }
+  .bubble-actions {
+    display: none; position: absolute; top: 50%; transform: translateY(-50%);
+    background: #2a3942; border-radius: 20px; padding: 3px 6px;
+    gap: 2px; box-shadow: 0 2px 8px rgba(0,0,0,.3); z-index: 10;
+  }
+  .msg-row.me   .bubble-actions { right: calc(100% + 6px); left: auto; }
+  .msg-row.them .bubble-actions { left: calc(100% + 6px); right: auto; }
+  .bubble-wrap:hover .bubble-actions { display: flex; }
+  .bubble-action-btn { background: none; border: none; font-size: 14px; cursor: pointer; padding: 2px 4px; border-radius: 4px; }
+  .bubble-action-btn:hover { background: var(--hover); }
 
   .modal-overlay {
     display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6);
@@ -482,9 +555,35 @@
     </div>
   </div>
 
-  <div class="input-bar">
-    <textarea id="msg-input" rows="1" placeholder="Type a message"></textarea>
-    <button class="send-btn" id="send-btn">➤</button>
+  <div class="input-bar" style="position:relative;">
+
+    <!-- Emoji picker (pops up above input bar) -->
+    <div class="emoji-picker" id="emoji-picker"></div>
+
+    <!-- Reply preview -->
+    <div class="reply-bar" id="reply-bar">
+      <div style="flex:1;overflow:hidden;">
+        <span class="reply-bar-label" id="reply-bar-label">Replying to</span>
+        <span class="reply-bar-text" id="reply-bar-text"></span>
+      </div>
+      <button class="reply-cancel" id="reply-cancel" title="Cancel reply">✕</button>
+    </div>
+
+    <!-- Formatting toolbar -->
+    <div class="fmt-toolbar">
+      <button class="fmt-btn" id="fmt-bold"      title="Bold (Ctrl+B)"><b>B</b></button>
+      <button class="fmt-btn" id="fmt-italic"    title="Italic (Ctrl+I)"><i>I</i></button>
+      <button class="fmt-btn" id="fmt-underline" title="Underline (Ctrl+U)"><u>U</u></button>
+      <div class="fmt-sep"></div>
+      <button class="fmt-btn" id="fmt-emoji"     title="Emoji">😊</button>
+    </div>
+
+    <!-- Input row -->
+    <div class="input-row">
+      <textarea id="msg-input" rows="1" placeholder="Type a message"></textarea>
+      <button class="send-btn" id="send-btn">➤</button>
+    </div>
+
   </div>
 </div>
 
@@ -509,6 +608,7 @@ let lastIncomingMsgId = 0;
 let isMuted    = localStorage.getItem("nexchat_muted") === "true";
 let typingTimer = null;
 let isTyping    = false;
+let replyTo     = null;  // { id, body, name }
 
 // ── Sound engine (Web Audio API — no external files needed) ───────────────────
 let audioCtx = null;
@@ -752,43 +852,57 @@ async function loadMessages() {
 
     const bubble = document.createElement("div");
 
+    // Build reply quote HTML if message has a reply
+    const replyHtml = msg.reply_to_body ? `
+      <div class="reply-quote">
+        <div class="reply-quote-name">${escHtml(msg.reply_to_name || "")}</div>
+        <div class="reply-quote-body">${escHtml(msg.reply_to_body.replace(/[*_~]/g,"")).substring(0,80)}</div>
+      </div>` : "";
+
+    // Reply action button (shown on hover)
+    const replyBtn = `<button class="bubble-action-btn" title="Reply" data-msg-id="${msg.id}" data-msg-body="${escAttr(msg.body)}" data-msg-name="${escAttr(isMe ? myUsername : (document.getElementById('other-name').textContent||'them'))}">↩</button>`;
+
     if (!isVisible && !isAlreadyRevealed) {
-      // Encrypted bubble
       bubble.className = "bubble encrypted";
       bubble.dataset.msgId   = msg.id;
-      bubble.dataset.msgBody = msg.body;   // stored for keyboard shortcut
+      bubble.dataset.msgBody = msg.body;
+      const wrap = document.createElement("div");
+      wrap.className = "bubble-wrap";
+      wrap.innerHTML = `<div class="bubble-actions">${replyBtn}</div>`;
       bubble.innerHTML = `
+        ${replyHtml}
         <div class="bubble-body"><span class="lock-icon">🔒</span>${escHtml(encryptText(msg.body, msg.id))}</div>
         <div class="bubble-footer">
           <span class="bubble-time">${msg.timestamp}</span>${tickHtml}
         </div>`;
-
-      // Click to select/highlight the bubble for keyboard reveal
-      bubble.addEventListener("click", () => {
-        // Deselect any previously selected bubble
-        document.querySelectorAll(".bubble.encrypted.selected")
-          .forEach(b => b.classList.remove("selected"));
-        bubble.classList.add("selected");
-      });
-      // Long-press for mobile (hold ~600ms)
+      wrap.appendChild(bubble);
+      // Touch long-press
       let touchTimer = null;
       bubble.addEventListener("touchstart", () => {
         touchTimer = setTimeout(() => revealBubble(bubble, msg.body, msg.id), 600);
       }, { passive: true });
-      bubble.addEventListener("touchend",   () => clearTimeout(touchTimer), { passive: true });
-      bubble.addEventListener("touchmove",  () => clearTimeout(touchTimer), { passive: true });
-
+      bubble.addEventListener("touchend",  () => clearTimeout(touchTimer), { passive: true });
+      bubble.addEventListener("touchmove", () => clearTimeout(touchTimer), { passive: true });
+      // Click to select
+      bubble.addEventListener("click", () => {
+        document.querySelectorAll(".bubble.encrypted.selected").forEach(b => b.classList.remove("selected"));
+        bubble.classList.add("selected");
+      });
+      row.appendChild(wrap);
     } else {
-      // Clear bubble (last message from each side, or currently revealed)
       bubble.className = isAlreadyRevealed ? "bubble revealing" : "bubble";
       bubble.innerHTML = `
-        <div class="bubble-body">${escHtml(msg.body)}</div>
+        ${replyHtml}
+        <div class="bubble-body">${formatBody(msg.body)}</div>
         <div class="bubble-footer">
           <span class="bubble-time">${msg.timestamp}</span>${tickHtml}
         </div>`;
+      const wrap = document.createElement("div");
+      wrap.className = "bubble-wrap";
+      wrap.innerHTML = `<div class="bubble-actions">${replyBtn}</div>`;
+      wrap.appendChild(bubble);
+      row.appendChild(wrap);
     }
-
-    row.appendChild(bubble);
     area.appendChild(row);
   });
 
@@ -796,8 +910,21 @@ async function loadMessages() {
 }
 
 function escHtml(s) {
-  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br/>");
+  return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 }
+function escAttr(s) {
+  return String(s||"").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+}
+
+// Reply button click delegation
+document.getElementById("chat-area").addEventListener("click", e => {
+  const btn = e.target.closest(".bubble-action-btn");
+  if (!btn) return;
+  const msgId   = parseInt(btn.dataset.msgId);
+  const msgBody = btn.dataset.msgBody;
+  const msgName = btn.dataset.msgName;
+  if (msgId && msgBody) setReply(msgId, msgBody, msgName);
+});
 
 // ── Keyboard shortcut: click bubble to select, then press Alt+D or F4 to reveal ─
 // Note: Fn key is hardware-level and not detectable by browsers.
@@ -812,25 +939,135 @@ document.addEventListener("keydown", e => {
 
   const selected = document.querySelector(".bubble.encrypted.selected");
   if (!selected) return;
-
-  // Find the msg data stored on the bubble
   const msgId   = parseInt(selected.dataset.msgId);
   const msgBody = selected.dataset.msgBody;
-  if (!msgBody) return;
-
+  if (!msgBody || !msgId) return;
   selected.classList.remove("selected");
   revealBubble(selected, msgBody, msgId);
 });
 
+// ── Text Formatting ────────────────────────────────────────────────────────────
+function applyFormat(tag) {
+  const input = document.getElementById("msg-input");
+  const start = input.selectionStart;
+  const end   = input.selectionEnd;
+  const val   = input.value;
+  const sel   = val.substring(start, end);
+  const markers = { bold: "*", italic: "_", underline: "~" };
+  const m = markers[tag];
+  if (!m) return;
+  const replacement = sel ? `${m}${sel}${m}` : `${m}${m}`;
+  input.value = val.substring(0, start) + replacement + val.substring(end);
+  const pos = sel ? start + replacement.length : start + 1;
+  input.setSelectionRange(pos, pos);
+  input.focus();
+}
+
+document.getElementById("fmt-bold")     .addEventListener("click", () => applyFormat("bold"));
+document.getElementById("fmt-italic")   .addEventListener("click", () => applyFormat("italic"));
+document.getElementById("fmt-underline").addEventListener("click", () => applyFormat("underline"));
+
+// Keyboard shortcuts
+document.getElementById("msg-input").addEventListener("keydown", e => {
+  if (e.ctrlKey || e.metaKey) {
+    if (e.key === "b") { e.preventDefault(); applyFormat("bold"); }
+    if (e.key === "i") { e.preventDefault(); applyFormat("italic"); }
+    if (e.key === "u") { e.preventDefault(); applyFormat("underline"); }
+  }
+});
+
+// Format body text for display: *bold* _italic_ ~underline~
+function formatBody(text) {
+  return escHtml(text)
+    .replace(/\*(.*?)\*/g,   "<strong>$1</strong>")
+    .replace(/_(.*?)_/g,     "<em>$1</em>")
+    .replace(/~(.*?)~/g,     "<u>$1</u>")
+    .replace(/\n/g, "<br/>");
+}
+
+// ── Emoji Picker ───────────────────────────────────────────────────────────────
+const EMOJIS = {
+  "Smileys":  ["😀","😃","😄","😁","😆","😅","🤣","😂","🙂","😊","😇","🥰","😍","😘","😗","😙","😚","😋","😛","😜","😝","🤑","🤗","🤭","🤫","🤔","🤐","🤨","😐","😑","😶","😏","😒","🙄","😬","🤥","😌","😔","😪","🤤","😴","😷","🤒","🤕","🤢","🤧","🥵","🥶","🥴","😵","🤯","🤠","🥳","😎","🤓","🧐","😕","😟","🙁","☹️","😮","😯","😲","😳","🥺","😦","😧","😨","😰","😥","😢","😭","😱","😖","😣","😞","😓","😩","😫","🥱","😤","😡","😠","🤬","😈","👿"],
+  "Gestures": ["👋","🤚","🖐","✋","🖖","👌","🤌","🤏","✌️","🤞","🤟","🤘","🤙","👈","👉","👆","🖕","👇","☝️","👍","👎","✊","👊","🤛","🤜","👏","🙌","🤲","🤝","🙏"],
+  "Hearts":   ["❤️","🧡","💛","💚","💙","💜","🖤","🤍","🤎","💔","❣️","💕","💞","💓","💗","💖","💘","💝","💟","☮️","✝️","☪️","🕉","✡️","🔯","🛐","☯️"],
+  "People":   ["👶","🧒","👦","👧","🧑","👱","👨","🧔","👩","🧓","👴","👵","🙍","🙎","🙅","🙆","💁","🙋","🧏","🙇","🤦","🤷"],
+  "Nature":   ["🐶","🐱","🐭","🐹","🐰","🦊","🐻","🐼","🐨","🐯","🦁","🐮","🐷","🐸","🐵","🐔","🐧","🐦","🦆","🦅","🦉","🦇","🐺","🐗","🐴","🦄","🐝","🐛","🦋","🐌","🐞","🐜","🦟","🦗","🕷","🦂","🐢","🐍","🦎","🦖","🦕","🐙","🦑","🦐","🦞","🦀","🐡","🐠","🐟","🐬","🐳","🐋","🦈","🐊","🐅","🐆","🦓","🦍","🦧","🐘","🦛","🦏","🐪","🐫","🦒","🦘","🐃","🐂","🐄","🐎","🐖","🐏","🐑","🦙","🐐","🦌","🐕","🐩","🦮","🐈","🐓","🦃","🦚","🦜","🦢","🦩","🕊","🐇","🦝","🦨","🦡","🦦","🦥","🐁","🐀","🐿","🦔"],
+  "Food":     ["🍎","🍐","🍊","🍋","🍌","🍉","🍇","🍓","🍈","🍒","🍑","🥭","🍍","🥥","🥝","🍅","🍆","🥑","🥦","🥬","🥒","🌶","🌽","🥕","🧄","🧅","🥔","🍠","🥐","🥯","🍞","🥖","🥨","🧀","🥚","🍳","🧈","🥞","🧇","🥓","🥩","🍗","🍖","🌭","🍔","🍟","🍕","🫓","🥪","🥙","🧆","🌮","🌯","🫔","🥗","🥘","🫕","🥫","🍝","🍜","🍲","🍛","🍣","🍱","🥟","🦪","🍤","🍙","🍚","🍘","🍥","🥮","🍢","🧁","🍰","🎂","🍮","🍭","🍬","🍫","🍿","🍩","🍪","🌰","🥜","🍯","🧃","🥤","🧋","☕","🍵","🧉","🍺","🍻","🥂","🍷","🥃","🍸","🍹","🍾"],
+  "Travel":   ["🚗","🚕","🚙","🚌","🚎","🏎","🚓","🚑","🚒","🚐","🛻","🚚","🚛","🚜","🏍","🛵","🦽","🦼","🛺","🚲","🛴","🛹","🛼","🚏","🛣","🛤","⛽","🚨","🚥","🚦","🛑","🚧","⚓","🛟","⛵","🛶","🚤","🛳","⛴","🛥","🚢","✈️","🛩","🛫","🛬","🪂","💺","🚁","🚟","🚠","🚡","🛰","🚀","🛸","🪐","🌍","🌎","🌏","🗺","🧭","🏔","⛰","🌋","🗻","🏕","🏖","🏜","🏝","🏞","🏟","🏛","🏗","🧱","🪨","🪵","🛖","🏘","🏚","🏠","🏡","🏢","🏣","🏤","🏥","🏦","🏨","🏩","🏪","🏫","🏬","🏭","🏯","🏰","💒","🗼","🗽","⛪","🕌","🛕","🕍","⛩","🕋"],
+  "Symbols":  ["❤️","✨","🔥","💯","✅","❌","⭐","🌟","💫","⚡","🎉","🎊","🎁","🎀","🏆","🥇","🎯","🎮","🎲","🎭","🎨","🖼","🎬","🎤","🎧","🎵","🎶","🎸","🎹","🥁","🎷","🎺","🪗","🎻","🪕","📱","💻","⌨️","🖥","🖨","🖱","💾","💿","📀","📷","📸","📹","🎥","📽","🎞","📞","☎️","📟","📠","📺","📻","🧭","⏱","⌚","📡","🔋","🔌","💡","🔦","🕯","🗑","🛢","💰","💴","💵","💶","💷","💸","💳","🧾","💹","✉️","📧","📨","📩","📪","📫","📬","📭","📮","🗳","✏️","✒️","🖊","🖋","📝","📁","📂","🗂","📅","📆","🗒","🗓","📇","📈","📉","📊","📋","📌","📍","📎","🖇","📏","📐","✂️","🗃","🗄","🗑","🔒","🔓","🔏","🔐","🔑","🗝","🔨","🪓","⛏","⚒","🛠","🗡","⚔️","🛡","🪚","🔧","🪛","🔩","⚙️","🗜","⚖️","🦯","🔗","⛓","🪝","🧲","🪜","⚗️","🧪","🧫","🧬","🔭","🔬","🩺","💊","💉","🩹","🩼","🩻","🩸","🧬","🦠","🧫","🧪","🌡","🧹","🧺","🧻","🚽","🚰","🚿","🛁","🛀","🧼","🫧","🪥","🧽","🧴","🛎","🔑","🗝","🚪","🪑","🛋","🛏","🛌","🧸","🪆","🖼","🛍","🧳","⛱","🌂","☂️","☔","⛄","⛇","🧊","🔥","💧","🌊","🌈"],
+};
+
+function buildEmojiPicker() {
+  const picker = document.getElementById("emoji-picker");
+  picker.innerHTML = "";
+  Object.entries(EMOJIS).forEach(([cat, emojis]) => {
+    const label = document.createElement("span");
+    label.className = "emoji-cat"; label.textContent = cat;
+    picker.appendChild(label);
+    emojis.forEach(em => {
+      const btn = document.createElement("button");
+      btn.className = "emoji-btn"; btn.textContent = em;
+      btn.addEventListener("click", () => {
+        const input = document.getElementById("msg-input");
+        const pos   = input.selectionStart;
+        const val   = input.value;
+        input.value = val.substring(0, pos) + em + val.substring(pos);
+        input.setSelectionRange(pos + em.length, pos + em.length);
+        input.focus();
+        autoResize(input);
+      });
+      picker.appendChild(btn);
+    });
+  });
+}
+
+document.getElementById("fmt-emoji").addEventListener("click", (e) => {
+  e.stopPropagation();
+  const picker = document.getElementById("emoji-picker");
+  if (!picker.innerHTML) buildEmojiPicker();
+  picker.classList.toggle("open");
+});
+document.addEventListener("click", () => {
+  document.getElementById("emoji-picker").classList.remove("open");
+});
+
+// ── Reply ──────────────────────────────────────────────────────────────────────
+function setReply(msgId, msgBody, msgName) {
+  replyTo = { id: msgId, body: msgBody, name: msgName };
+  document.getElementById("reply-bar-label").textContent = `Replying to ${msgName}`;
+  document.getElementById("reply-bar-text").textContent  = msgBody.replace(/[*_~]/g, "");
+  document.getElementById("reply-bar").classList.add("visible");
+  document.getElementById("msg-input").focus();
+}
+
+function clearReply() {
+  replyTo = null;
+  document.getElementById("reply-bar").classList.remove("visible");
+}
+
+document.getElementById("reply-cancel").addEventListener("click", clearReply);
+
 // ── Send ───────────────────────────────────────────────────────────────────────
+function autoResize(el) {
+  el.style.height = "auto";
+  el.style.height = Math.min(el.scrollHeight, 120) + "px";
+}
+
 async function sendMessage() {
   const input = document.getElementById("msg-input");
   const body  = input.value.trim();
   if (!body) return;
-  input.value = ""; input.style.height = "auto";
+  input.value = ""; autoResize(input);
   clearTimeout(typingTimer);
   setTyping(false);
-  await api("/api/send", { method: "POST", body: JSON.stringify({ body }) });
+  const payload = { body };
+  if (replyTo) {
+    payload.reply_to_id   = replyTo.id;
+    payload.reply_to_body = replyTo.body;
+    payload.reply_to_name = replyTo.name;
+  }
+  clearReply();
+  await api("/api/send", { method: "POST", body: JSON.stringify(payload) });
   await loadMessages();
 }
 
@@ -839,12 +1076,10 @@ document.getElementById("msg-input").addEventListener("keydown", e => {
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 });
 document.getElementById("msg-input").addEventListener("input", function() {
-  this.style.height = "auto";
-  this.style.height = Math.min(this.scrollHeight, 120) + "px";
-  // Broadcast typing
+  autoResize(this);
   setTyping(true);
   clearTimeout(typingTimer);
-  typingTimer = setTimeout(() => setTyping(false), 2500); // stop after 2.5s idle
+  typingTimer = setTimeout(() => setTyping(false), 2500);
 });
 document.getElementById("msg-input").addEventListener("blur", () => {
   clearTimeout(typingTimer);
