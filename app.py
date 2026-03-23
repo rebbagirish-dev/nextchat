@@ -1,22 +1,15 @@
 """
-NexChat - Flask Web App (Token-based auth — works on Railway/Render/etc.)
-Run locally: python app.py
+NexChat - Flask Web App
 """
-
 from flask import Flask, render_template, request, jsonify
-import sqlite3
-import hashlib
-import datetime
-import os
-import secrets
+import sqlite3, hashlib, datetime, os, secrets
 
 app = Flask(__name__)
 
-# DB path: /tmp on Railway (writable), local folder otherwise
-if os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("RENDER"):
-    DB_PATH = "/tmp/nexchat.db"
-else:
-    DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "nexchat.db")
+DB_PATH = "/tmp/nexchat.db" if (os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("RENDER")) \
+          else os.path.join(os.path.dirname(os.path.abspath(__file__)), "nexchat.db")
+
+# ── DB ─────────────────────────────────────────────────────────────────────────
 
 def get_conn():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
@@ -38,43 +31,30 @@ def init_db():
             last_active TEXT
         );
         CREATE TABLE IF NOT EXISTS messages (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            sender_id   INTEGER NOT NULL,
-            receiver_id INTEGER NOT NULL,
-            body        TEXT NOT NULL,
-            timestamp   TEXT NOT NULL,
-            status      TEXT DEFAULT 'sent',
-            reply_to_id INTEGER DEFAULT NULL,
-            reply_to_body TEXT DEFAULT NULL,
-            reply_to_name TEXT DEFAULT NULL
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            sender_id     INTEGER NOT NULL,
+            receiver_id   INTEGER NOT NULL,
+            body          TEXT NOT NULL,
+            timestamp     TEXT NOT NULL,
+            status        TEXT DEFAULT 'sent'
         );
     """)
     for uname, pwd in [("alice", "Shutterflies1!"), ("bob", "Shutterflies1!")]:
         pw_hash = hashlib.sha256(pwd.encode()).hexdigest()
-        c.execute("INSERT OR IGNORE INTO users (username, password) VALUES (?,?)",
-                  (uname, pw_hash))
+        c.execute("INSERT OR IGNORE INTO users (username, password) VALUES (?,?)", (uname, pw_hash))
     conn.commit()
-    # Safe migration: add typing column to existing DBs that predate this field
-    try:
-        conn.execute("ALTER TABLE users ADD COLUMN typing INTEGER DEFAULT 0")
-        conn.commit()
-    except Exception:
-        pass
-    try:
-        conn.execute("ALTER TABLE users ADD COLUMN last_active TEXT")
-        conn.commit()
-    except Exception:
-        pass
-    try:
-        conn.execute("ALTER TABLE messages ADD COLUMN reply_to_id INTEGER DEFAULT NULL")
-        conn.execute("ALTER TABLE messages ADD COLUMN reply_to_body TEXT DEFAULT NULL")
-        conn.execute("ALTER TABLE messages ADD COLUMN reply_to_name TEXT DEFAULT NULL")
-        conn.commit()
-    except Exception:
-        pass  # columns already exist
+    # Safe migrations for existing DBs
+    for sql in [
+        "ALTER TABLE users ADD COLUMN typing INTEGER DEFAULT 0",
+        "ALTER TABLE users ADD COLUMN last_active TEXT",
+    ]:
+        try: conn.execute(sql); conn.commit()
+        except: pass
     conn.close()
 
 init_db()
+
+# ── Helpers ────────────────────────────────────────────────────────────────────
 
 def hash_pw(pw):
     return hashlib.sha256(pw.encode()).hexdigest()
@@ -84,8 +64,16 @@ def now_ts():
     return datetime.datetime.now(ist).strftime("%I:%M %p")
 
 def now_dt():
-    """Full ISO datetime string for heartbeat comparisons."""
     return datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
+def is_active(last_active_str, threshold=10):
+    if not last_active_str:
+        return False
+    try:
+        last = datetime.datetime.strptime(last_active_str, "%Y-%m-%d %H:%M:%S")
+        return (datetime.datetime.utcnow() - last).total_seconds() < threshold
+    except:
+        return False
 
 def get_user_by_token(token):
     if not token:
@@ -95,20 +83,14 @@ def get_user_by_token(token):
     conn.close()
     return dict(row) if row else None
 
-def is_active(last_active_str, threshold_seconds=10):
-    """True if last_active was within threshold_seconds ago."""
-    if not last_active_str:
-        return False
-    try:
-        last = datetime.datetime.strptime(last_active_str, "%Y-%m-%d %H:%M:%S")
-        return (datetime.datetime.utcnow() - last).total_seconds() < threshold_seconds
-    except Exception:
-        return False
+def require_auth():
     token = request.headers.get("X-Auth-Token", "").strip()
     user  = get_user_by_token(token)
     if not user:
         return None, (jsonify({"ok": False, "error": "Not authenticated"}), 401)
     return user, None
+
+# ── Routes ─────────────────────────────────────────────────────────────────────
 
 @app.route("/")
 def index():
@@ -120,8 +102,6 @@ def health():
 
 @app.route("/logged-out")
 def logged_out():
-    # Neutral landing page after logout — just serves the app shell
-    # which will show the login screen since no token exists
     return render_template("index.html")
 
 @app.route("/login", methods=["POST"])
@@ -141,7 +121,8 @@ def login():
             conn.close()
             return jsonify({"ok": False, "error": "Invalid username or password."})
         token = secrets.token_hex(32)
-        conn.execute("UPDATE users SET token=?, online=1, last_active=? WHERE id=?", (token, now_dt(), user["id"]))
+        conn.execute("UPDATE users SET token=?, online=1, last_active=? WHERE id=?",
+                     (token, now_dt(), user["id"]))
         conn.commit()
         conn.close()
         return jsonify({"ok": True, "token": token, "user_id": user["id"], "username": user["username"]})
@@ -153,7 +134,8 @@ def logout():
     user, _ = require_auth()
     if user:
         conn = get_conn()
-        conn.execute("UPDATE users SET token=NULL, online=0, typing=0, last_active=NULL, last_seen=? WHERE id=?", (now_ts(), user["id"]))
+        conn.execute("UPDATE users SET token=NULL, online=0, typing=0, last_active=NULL, last_seen=? WHERE id=?",
+                     (now_ts(), user["id"]))
         conn.commit()
         conn.close()
     return jsonify({"ok": True})
@@ -170,9 +152,18 @@ def api_other():
     user, err = require_auth()
     if err: return err
     conn  = get_conn()
-    other = conn.execute("SELECT id, username, online, last_seen FROM users WHERE id != ?", (user["id"],)).fetchone()
+    other = conn.execute(
+        "SELECT id, username, last_seen, last_active FROM users WHERE id != ?", (user["id"],)
+    ).fetchone()
     conn.close()
-    return jsonify(dict(other) if other else {})
+    if not other:
+        return jsonify({})
+    return jsonify({
+        "id":        other["id"],
+        "username":  other["username"],
+        "online":    1 if is_active(other["last_active"]) else 0,
+        "last_seen": other["last_seen"] or "",
+    })
 
 @app.route("/api/messages")
 def api_messages():
@@ -185,12 +176,13 @@ def api_messages():
         conn.close()
         return jsonify([])
     other_id = other["id"]
-    conn.execute("UPDATE messages SET status='delivered' WHERE sender_id=? AND receiver_id=? AND status='sent'", (other_id, my_id))
-    conn.execute("UPDATE messages SET status='read' WHERE sender_id=? AND receiver_id=? AND status='delivered'", (other_id, my_id))
+    conn.execute("UPDATE messages SET status='delivered' WHERE sender_id=? AND receiver_id=? AND status='sent'",
+                 (other_id, my_id))
+    conn.execute("UPDATE messages SET status='read' WHERE sender_id=? AND receiver_id=? AND status='delivered'",
+                 (other_id, my_id))
     conn.commit()
     rows = conn.execute("""
-        SELECT id, sender_id, body, timestamp, status,
-               reply_to_id, reply_to_body, reply_to_name FROM messages
+        SELECT id, sender_id, body, timestamp, status FROM messages
         WHERE (sender_id=? AND receiver_id=?) OR (sender_id=? AND receiver_id=?)
         ORDER BY id ASC
     """, (my_id, other_id, other_id, my_id)).fetchall()
@@ -205,92 +197,19 @@ def api_send():
     body = data.get("body", "").strip()
     if not body:
         return jsonify({"ok": False, "error": "Empty message"})
-    my_id        = user["id"]
-    reply_to_id  = data.get("reply_to_id")
-    reply_to_body= data.get("reply_to_body", "")
-    reply_to_name= data.get("reply_to_name", "")
+    my_id = user["id"]
     conn  = get_conn()
     other = conn.execute("SELECT id FROM users WHERE id != ?", (my_id,)).fetchone()
     if not other:
         conn.close()
         return jsonify({"ok": False})
-    conn.execute(
-        "INSERT INTO messages (sender_id,receiver_id,body,timestamp,status,reply_to_id,reply_to_body,reply_to_name) VALUES (?,?,?,?,'sent',?,?,?)",
-        (my_id, other["id"], body, now_ts(), reply_to_id, reply_to_body, reply_to_name)
-    )
+    conn.execute("INSERT INTO messages (sender_id,receiver_id,body,timestamp,status) VALUES (?,?,?,?,'sent')",
+                 (my_id, other["id"], body, now_ts()))
     conn.commit()
     conn.close()
     return jsonify({"ok": True})
 
-@app.route("/api/clear", methods=["POST"])
-def api_clear():
-    user, err = require_auth()
-    if err: return err
-    conn = get_conn()
-    conn.execute("DELETE FROM messages WHERE status='read'")
-    conn.commit()
-    conn.close()
-    return jsonify({"ok": True})
-
-# sendBeacon passes token as query param (can't set headers on beacon)
-@app.route("/api/clear-beacon", methods=["POST"])
-def api_clear_beacon():
-    token = request.args.get("token", "").strip()
-    user  = get_user_by_token(token)
-    if user:
-        conn = get_conn()
-        conn.execute("DELETE FROM messages WHERE status='read'")
-        conn.commit()
-        conn.close()
-    return "", 204
-
-@app.route("/api/logout-beacon", methods=["POST"])
-def api_logout_beacon():
-    token = request.args.get("token", "").strip()
-    user  = get_user_by_token(token)
-    if user:
-        conn = get_conn()
-        conn.execute(
-            "UPDATE users SET token=NULL, online=0, typing=0, last_active=NULL, last_seen=? WHERE id=?",
-            (now_ts(), user["id"])
-        )
-        conn.commit()
-        conn.close()
-    return "", 204
-
-@app.route("/api/heartbeat", methods=["POST"])
-def api_heartbeat():
-    user, err = require_auth()
-    if err: return err
-    conn = get_conn()
-    conn.execute("UPDATE users SET last_active=?, online=1 WHERE id=?", (now_dt(), user["id"]))
-    conn.commit()
-    conn.close()
-    return "", 204
-
-@app.route("/api/poll")
-def api_poll():
-    user, err = require_auth()
-    if err: return jsonify({"logged_in": False}), 401
-    my_id = user["id"]
-    # Stamp our own heartbeat on every poll
-    conn  = get_conn()
-    conn.execute("UPDATE users SET last_active=?, online=1 WHERE id=?", (now_dt(), my_id))
-    conn.commit()
-    total = conn.execute("SELECT COUNT(*) as c FROM messages").fetchone()["c"]
-    other = conn.execute(
-        "SELECT online, last_seen, typing, last_active FROM users WHERE id != ?", (my_id,)
-    ).fetchone()
-    conn.close()
-    # Use heartbeat to determine real online status (10s timeout)
-    other_online = is_active(other["last_active"]) if other else False
-    return jsonify({
-        "logged_in":       True,
-        "msg_count":       total,
-        "other_online":    1 if other_online else 0,
-        "other_last_seen": other["last_seen"] if other else "",
-        "other_typing":    other["typing"]    if other else 0,
-    })
+@app.route("/api/typing", methods=["POST"])
 def api_typing():
     user, err = require_auth()
     if err: return err
@@ -308,18 +227,54 @@ def api_poll():
     if err: return jsonify({"logged_in": False}), 401
     my_id = user["id"]
     conn  = get_conn()
+    # Stamp heartbeat
+    conn.execute("UPDATE users SET last_active=?, online=1 WHERE id=?", (now_dt(), my_id))
+    conn.commit()
     total = conn.execute("SELECT COUNT(*) as c FROM messages").fetchone()["c"]
     other = conn.execute(
-        "SELECT online, last_seen, typing FROM users WHERE id != ?", (my_id,)
+        "SELECT last_seen, typing, last_active FROM users WHERE id != ?", (my_id,)
     ).fetchone()
     conn.close()
     return jsonify({
         "logged_in":       True,
         "msg_count":       total,
-        "other_online":    other["online"]    if other else 0,
+        "other_online":    1 if (other and is_active(other["last_active"])) else 0,
         "other_last_seen": other["last_seen"] if other else "",
         "other_typing":    other["typing"]    if other else 0,
     })
+
+@app.route("/api/clear", methods=["POST"])
+def api_clear():
+    user, err = require_auth()
+    if err: return err
+    conn = get_conn()
+    conn.execute("DELETE FROM messages WHERE status='read'")
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+@app.route("/api/clear-beacon", methods=["POST"])
+def api_clear_beacon():
+    token = request.args.get("token", "").strip()
+    user  = get_user_by_token(token)
+    if user:
+        conn = get_conn()
+        conn.execute("DELETE FROM messages WHERE status='read'")
+        conn.commit()
+        conn.close()
+    return "", 204
+
+@app.route("/api/logout-beacon", methods=["POST"])
+def api_logout_beacon():
+    token = request.args.get("token", "").strip()
+    user  = get_user_by_token(token)
+    if user:
+        conn = get_conn()
+        conn.execute("UPDATE users SET token=NULL, online=0, typing=0, last_active=NULL, last_seen=? WHERE id=?",
+                     (now_ts(), user["id"]))
+        conn.commit()
+        conn.close()
+    return "", 204
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
