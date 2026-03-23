@@ -28,13 +28,14 @@ def init_db():
     c = conn.cursor()
     c.executescript("""
         CREATE TABLE IF NOT EXISTS users (
-            id        INTEGER PRIMARY KEY,
-            username  TEXT UNIQUE NOT NULL,
-            password  TEXT NOT NULL,
-            token     TEXT,
-            online    INTEGER DEFAULT 0,
-            last_seen TEXT,
-            typing    INTEGER DEFAULT 0
+            id          INTEGER PRIMARY KEY,
+            username    TEXT UNIQUE NOT NULL,
+            password    TEXT NOT NULL,
+            token       TEXT,
+            online      INTEGER DEFAULT 0,
+            last_seen   TEXT,
+            typing      INTEGER DEFAULT 0,
+            last_active TEXT
         );
         CREATE TABLE IF NOT EXISTS messages (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,6 +61,11 @@ def init_db():
     except Exception:
         pass
     try:
+        conn.execute("ALTER TABLE users ADD COLUMN last_active TEXT")
+        conn.commit()
+    except Exception:
+        pass
+    try:
         conn.execute("ALTER TABLE messages ADD COLUMN reply_to_id INTEGER DEFAULT NULL")
         conn.execute("ALTER TABLE messages ADD COLUMN reply_to_body TEXT DEFAULT NULL")
         conn.execute("ALTER TABLE messages ADD COLUMN reply_to_name TEXT DEFAULT NULL")
@@ -77,6 +83,10 @@ def now_ts():
     ist = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
     return datetime.datetime.now(ist).strftime("%I:%M %p")
 
+def now_dt():
+    """Full ISO datetime string for heartbeat comparisons."""
+    return datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
 def get_user_by_token(token):
     if not token:
         return None
@@ -85,7 +95,15 @@ def get_user_by_token(token):
     conn.close()
     return dict(row) if row else None
 
-def require_auth():
+def is_active(last_active_str, threshold_seconds=10):
+    """True if last_active was within threshold_seconds ago."""
+    if not last_active_str:
+        return False
+    try:
+        last = datetime.datetime.strptime(last_active_str, "%Y-%m-%d %H:%M:%S")
+        return (datetime.datetime.utcnow() - last).total_seconds() < threshold_seconds
+    except Exception:
+        return False
     token = request.headers.get("X-Auth-Token", "").strip()
     user  = get_user_by_token(token)
     if not user:
@@ -123,7 +141,7 @@ def login():
             conn.close()
             return jsonify({"ok": False, "error": "Invalid username or password."})
         token = secrets.token_hex(32)
-        conn.execute("UPDATE users SET token=?, online=1 WHERE id=?", (token, user["id"]))
+        conn.execute("UPDATE users SET token=?, online=1, last_active=? WHERE id=?", (token, now_dt(), user["id"]))
         conn.commit()
         conn.close()
         return jsonify({"ok": True, "token": token, "user_id": user["id"], "username": user["username"]})
@@ -135,7 +153,7 @@ def logout():
     user, _ = require_auth()
     if user:
         conn = get_conn()
-        conn.execute("UPDATE users SET token=NULL, online=0, typing=0, last_seen=? WHERE id=?", (now_ts(), user["id"]))
+        conn.execute("UPDATE users SET token=NULL, online=0, typing=0, last_active=NULL, last_seen=? WHERE id=?", (now_ts(), user["id"]))
         conn.commit()
         conn.close()
     return jsonify({"ok": True})
@@ -233,14 +251,46 @@ def api_logout_beacon():
     if user:
         conn = get_conn()
         conn.execute(
-            "UPDATE users SET token=NULL, online=0, typing=0, last_seen=? WHERE id=?",
+            "UPDATE users SET token=NULL, online=0, typing=0, last_active=NULL, last_seen=? WHERE id=?",
             (now_ts(), user["id"])
         )
         conn.commit()
         conn.close()
     return "", 204
 
-@app.route("/api/typing", methods=["POST"])
+@app.route("/api/heartbeat", methods=["POST"])
+def api_heartbeat():
+    user, err = require_auth()
+    if err: return err
+    conn = get_conn()
+    conn.execute("UPDATE users SET last_active=?, online=1 WHERE id=?", (now_dt(), user["id"]))
+    conn.commit()
+    conn.close()
+    return "", 204
+
+@app.route("/api/poll")
+def api_poll():
+    user, err = require_auth()
+    if err: return jsonify({"logged_in": False}), 401
+    my_id = user["id"]
+    # Stamp our own heartbeat on every poll
+    conn  = get_conn()
+    conn.execute("UPDATE users SET last_active=?, online=1 WHERE id=?", (now_dt(), my_id))
+    conn.commit()
+    total = conn.execute("SELECT COUNT(*) as c FROM messages").fetchone()["c"]
+    other = conn.execute(
+        "SELECT online, last_seen, typing, last_active FROM users WHERE id != ?", (my_id,)
+    ).fetchone()
+    conn.close()
+    # Use heartbeat to determine real online status (10s timeout)
+    other_online = is_active(other["last_active"]) if other else False
+    return jsonify({
+        "logged_in":       True,
+        "msg_count":       total,
+        "other_online":    1 if other_online else 0,
+        "other_last_seen": other["last_seen"] if other else "",
+        "other_typing":    other["typing"]    if other else 0,
+    })
 def api_typing():
     user, err = require_auth()
     if err: return err
