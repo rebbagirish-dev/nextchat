@@ -113,7 +113,7 @@ body {
 .dropdown-menu button.danger { color: var(--danger); }
 
 /* ── Typing indicator ── */
-.typing-indicator { display: none; align-items: center; gap: 6px; padding: 6px 12px; margin: 4px 0 4px 8px; }
+.typing-indicator { display: none; align-items: center; gap: 6px; padding: 4px 14px 0; }
 .typing-indicator.visible { display: flex; }
 .typing-indicator span { font-size: 12px; color: var(--accent); font-style: italic; }
 .typing-dots { display: flex; gap: 3px; align-items: center; }
@@ -281,11 +281,6 @@ body {
     </div>
   </div>
 
-  <div class="typing-indicator" id="typing-indicator">
-    <div class="typing-dots"><i></i><i></i><i></i></div>
-    <span id="typing-text">typing…</span>
-  </div>
-
   <div id="chat-area">
     <div class="empty-chat" id="empty-state">
       <div class="icon">💬</div>
@@ -295,6 +290,10 @@ body {
 
   <div class="input-bar">
     <div class="emoji-picker" id="emoji-picker"></div>
+    <div class="typing-indicator" id="typing-indicator">
+      <div class="typing-dots"><i></i><i></i><i></i></div>
+      <span id="typing-text">typing…</span>
+    </div>
     <div class="fmt-toolbar">
       <button class="fmt-btn" id="fmt-bold"      title="Bold (Ctrl+B)"><b>B</b></button>
       <button class="fmt-btn" id="fmt-italic"    title="Italic (Ctrl+I)"><i>I</i></button>
@@ -731,6 +730,9 @@ window.addEventListener("resize", setAppHeight);
 window.addEventListener("orientationchange", () => setTimeout(setAppHeight, 200));
 document.getElementById("msg-input").addEventListener("focus",  () => { setTimeout(() => { setAppHeight(); const a=document.getElementById("chat-area"); if(a)a.scrollTop=a.scrollHeight; }, 350); });
 document.getElementById("msg-input").addEventListener("blur",   () => setTimeout(setAppHeight, 300));
+
+// ── Keep-alive ping (prevents Render free tier from sleeping) ─────────────────
+setInterval(() => fetch("/keep-alive").catch(() => {}), 10 * 60 * 1000);
 
 // ── Boot ───────────────────────────────────────────────────────────────────────
 updateMuteBtn();
