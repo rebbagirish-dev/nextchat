@@ -1,58 +1,160 @@
 """
 NexChat - Flask Web App
+Uses PostgreSQL on Render (DATABASE_URL env var), SQLite locally.
 """
 from flask import Flask, render_template, request, jsonify
-import sqlite3, hashlib, datetime, os, secrets
+import hashlib, datetime, os, secrets
 
 app = Flask(__name__)
 
-DB_PATH = "/tmp/nexchat.db" if (os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("RENDER")) \
-          else os.path.join(os.path.dirname(os.path.abspath(__file__)), "nexchat.db")
+# ── DB backend selection ───────────────────────────────────────────────────────
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
-# ── DB ─────────────────────────────────────────────────────────────────────────
+if DATABASE_URL:
+    # PostgreSQL (Render)
+    import psycopg2
+    import psycopg2.extras
 
-def get_conn():
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    return conn
+    def get_conn():
+        conn = psycopg2.connect(DATABASE_URL, sslmode="require")
+        return conn
+
+    def get_cursor(conn):
+        return conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    PG = True
+else:
+    # SQLite (local)
+    import sqlite3
+    DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "nexchat.db")
+
+    def get_conn():
+        conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    def get_cursor(conn):
+        return conn.cursor()
+
+    PG = False
+
+# ── DB init ────────────────────────────────────────────────────────────────────
 
 def init_db():
     conn = get_conn()
-    c = conn.cursor()
-    c.executescript("""
-        CREATE TABLE IF NOT EXISTS users (
-            id          INTEGER PRIMARY KEY,
-            username    TEXT UNIQUE NOT NULL,
-            password    TEXT NOT NULL,
-            token       TEXT,
-            online      INTEGER DEFAULT 0,
-            last_seen   TEXT,
-            typing      INTEGER DEFAULT 0,
-            last_active TEXT
-        );
-        CREATE TABLE IF NOT EXISTS messages (
-            id            INTEGER PRIMARY KEY AUTOINCREMENT,
-            sender_id     INTEGER NOT NULL,
-            receiver_id   INTEGER NOT NULL,
-            body          TEXT NOT NULL,
-            timestamp     TEXT NOT NULL,
-            status        TEXT DEFAULT 'sent'
-        );
-    """)
-    for uname, pwd in [("alice", "Shutterflies1!"), ("bob", "Shutterflies1!")]:
-        pw_hash = hashlib.sha256(pwd.encode()).hexdigest()
-        c.execute("INSERT OR IGNORE INTO users (username, password) VALUES (?,?)", (uname, pw_hash))
+    cur  = get_cursor(conn)
+
+    if PG:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id          SERIAL PRIMARY KEY,
+                username    TEXT UNIQUE NOT NULL,
+                password    TEXT NOT NULL,
+                token       TEXT,
+                online      INTEGER DEFAULT 0,
+                last_seen   TEXT,
+                typing      INTEGER DEFAULT 0,
+                last_active TEXT
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS messages (
+                id          SERIAL PRIMARY KEY,
+                sender_id   INTEGER NOT NULL,
+                receiver_id INTEGER NOT NULL,
+                body        TEXT NOT NULL,
+                timestamp   TEXT NOT NULL,
+                status      TEXT DEFAULT 'sent'
+            )
+        """)
+        # Seed users
+        for uname, pwd in [("alice", "Shutterflies1!"), ("bob", "Shutterflies1!")]:
+            pw_hash = hashlib.sha256(pwd.encode()).hexdigest()
+            cur.execute("""
+                INSERT INTO users (username, password)
+                VALUES (%s, %s)
+                ON CONFLICT (username) DO NOTHING
+            """, (uname, pw_hash))
+    else:
+        cur.executescript("""
+            CREATE TABLE IF NOT EXISTS users (
+                id          INTEGER PRIMARY KEY,
+                username    TEXT UNIQUE NOT NULL,
+                password    TEXT NOT NULL,
+                token       TEXT,
+                online      INTEGER DEFAULT 0,
+                last_seen   TEXT,
+                typing      INTEGER DEFAULT 0,
+                last_active TEXT
+            );
+            CREATE TABLE IF NOT EXISTS messages (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                sender_id   INTEGER NOT NULL,
+                receiver_id INTEGER NOT NULL,
+                body        TEXT NOT NULL,
+                timestamp   TEXT NOT NULL,
+                status      TEXT DEFAULT 'sent'
+            );
+        """)
+        for uname, pwd in [("alice", "Shutterflies1!"), ("bob", "Shutterflies1!")]:
+            pw_hash = hashlib.sha256(pwd.encode()).hexdigest()
+            cur.execute("INSERT OR IGNORE INTO users (username, password) VALUES (?,?)",
+                        (uname, pw_hash))
+        # Migrations
+        for sql in [
+            "ALTER TABLE users ADD COLUMN typing INTEGER DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN last_active TEXT",
+        ]:
+            try: cur.execute(sql)
+            except: pass
+
     conn.commit()
-    # Safe migrations for existing DBs
-    for sql in [
-        "ALTER TABLE users ADD COLUMN typing INTEGER DEFAULT 0",
-        "ALTER TABLE users ADD COLUMN last_active TEXT",
-    ]:
-        try: conn.execute(sql); conn.commit()
-        except: pass
+    cur.close()
     conn.close()
 
 init_db()
+
+# ── Query helpers ──────────────────────────────────────────────────────────────
+
+def ph(n=1):
+    """Return placeholder: %s for PG, ? for SQLite."""
+    return "%s" if PG else "?"
+
+def phs(n):
+    """Return n placeholders comma-separated."""
+    p = "%s" if PG else "?"
+    return ",".join([p]*n)
+
+def qfetch(sql, params=()):
+    conn = get_conn()
+    cur  = get_cursor(conn)
+    cur.execute(sql, params)
+    rows = cur.fetchall()
+    cur.close(); conn.close()
+    return [dict(r) for r in rows]
+
+def qfetchone(sql, params=()):
+    conn = get_conn()
+    cur  = get_cursor(conn)
+    cur.execute(sql, params)
+    row = cur.fetchone()
+    cur.close(); conn.close()
+    return dict(row) if row else None
+
+def qexec(sql, params=()):
+    conn = get_conn()
+    cur  = get_cursor(conn)
+    cur.execute(sql, params)
+    conn.commit()
+    cur.close(); conn.close()
+
+def qexec_many(sqls_params):
+    conn = get_conn()
+    cur  = get_cursor(conn)
+    for sql, params in sqls_params:
+        cur.execute(sql, params)
+    conn.commit()
+    cur.close(); conn.close()
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -70,7 +172,7 @@ def is_active(last_active_str, threshold=10):
     if not last_active_str:
         return False
     try:
-        last = datetime.datetime.strptime(last_active_str, "%Y-%m-%d %H:%M:%S")
+        last = datetime.datetime.strptime(str(last_active_str)[:19], "%Y-%m-%d %H:%M:%S")
         return (datetime.datetime.utcnow() - last).total_seconds() < threshold
     except:
         return False
@@ -78,10 +180,8 @@ def is_active(last_active_str, threshold=10):
 def get_user_by_token(token):
     if not token:
         return None
-    conn = get_conn()
-    row = conn.execute("SELECT * FROM users WHERE token=?", (token,)).fetchone()
-    conn.close()
-    return dict(row) if row else None
+    p = ph()
+    return qfetchone(f"SELECT * FROM users WHERE token={p}", (token,))
 
 def require_auth():
     token = request.headers.get("X-Auth-Token", "").strip()
@@ -100,6 +200,10 @@ def index():
 def health():
     return jsonify({"status": "ok"}), 200
 
+@app.route("/keep-alive")
+def keep_alive():
+    return jsonify({"status": "alive"}), 200
+
 @app.route("/logged-out")
 def logged_out():
     return render_template("index.html")
@@ -112,19 +216,16 @@ def login():
         password = data.get("password", "").strip()
         if not username or not password:
             return jsonify({"ok": False, "error": "Username and password required."})
-        conn = get_conn()
-        user = conn.execute(
-            "SELECT * FROM users WHERE username=? AND password=?",
+        p    = ph()
+        user = qfetchone(
+            f"SELECT * FROM users WHERE username={p} AND password={p}",
             (username, hash_pw(password))
-        ).fetchone()
+        )
         if not user:
-            conn.close()
             return jsonify({"ok": False, "error": "Invalid username or password."})
         token = secrets.token_hex(32)
-        conn.execute("UPDATE users SET token=?, online=1, last_active=? WHERE id=?",
-                     (token, now_dt(), user["id"]))
-        conn.commit()
-        conn.close()
+        qexec(f"UPDATE users SET token={p}, online=1, last_active={p} WHERE id={p}",
+              (token, now_dt(), user["id"]))
         return jsonify({"ok": True, "token": token, "user_id": user["id"], "username": user["username"]})
     except Exception as e:
         return jsonify({"ok": False, "error": f"Server error: {str(e)}"}), 500
@@ -133,11 +234,9 @@ def login():
 def logout():
     user, _ = require_auth()
     if user:
-        conn = get_conn()
-        conn.execute("UPDATE users SET token=NULL, online=0, typing=0, last_active=NULL, last_seen=? WHERE id=?",
-                     (now_ts(), user["id"]))
-        conn.commit()
-        conn.close()
+        p = ph()
+        qexec(f"UPDATE users SET token=NULL, online=0, typing=0, last_active=NULL, last_seen={p} WHERE id={p}",
+              (now_ts(), user["id"]))
     return jsonify({"ok": True})
 
 @app.route("/api/me")
@@ -151,11 +250,11 @@ def api_me():
 def api_other():
     user, err = require_auth()
     if err: return err
-    conn  = get_conn()
-    other = conn.execute(
-        "SELECT id, username, last_seen, last_active FROM users WHERE id != ?", (user["id"],)
-    ).fetchone()
-    conn.close()
+    p     = ph()
+    other = qfetchone(
+        f"SELECT id, username, last_seen, last_active FROM users WHERE id != {p}",
+        (user["id"],)
+    )
     if not other:
         return jsonify({})
     return jsonify({
@@ -170,24 +269,23 @@ def api_messages():
     user, err = require_auth()
     if err: return err
     my_id = user["id"]
-    conn  = get_conn()
-    other = conn.execute("SELECT id FROM users WHERE id != ?", (my_id,)).fetchone()
+    p     = ph()
+    other = qfetchone(f"SELECT id FROM users WHERE id != {p}", (my_id,))
     if not other:
-        conn.close()
         return jsonify([])
     other_id = other["id"]
-    conn.execute("UPDATE messages SET status='delivered' WHERE sender_id=? AND receiver_id=? AND status='sent'",
-                 (other_id, my_id))
-    conn.execute("UPDATE messages SET status='read' WHERE sender_id=? AND receiver_id=? AND status='delivered'",
-                 (other_id, my_id))
-    conn.commit()
-    rows = conn.execute("""
+    qexec_many([
+        (f"UPDATE messages SET status='delivered' WHERE sender_id={p} AND receiver_id={p} AND status='sent'",
+         (other_id, my_id)),
+        (f"UPDATE messages SET status='read' WHERE sender_id={p} AND receiver_id={p} AND status='delivered'",
+         (other_id, my_id)),
+    ])
+    rows = qfetch(f"""
         SELECT id, sender_id, body, timestamp, status FROM messages
-        WHERE (sender_id=? AND receiver_id=?) OR (sender_id=? AND receiver_id=?)
+        WHERE (sender_id={p} AND receiver_id={p}) OR (sender_id={p} AND receiver_id={p})
         ORDER BY id ASC
-    """, (my_id, other_id, other_id, my_id)).fetchall()
-    conn.close()
-    return jsonify([dict(r) for r in rows])
+    """, (my_id, other_id, other_id, my_id))
+    return jsonify(rows)
 
 @app.route("/api/send", methods=["POST"])
 def api_send():
@@ -198,15 +296,14 @@ def api_send():
     if not body:
         return jsonify({"ok": False, "error": "Empty message"})
     my_id = user["id"]
-    conn  = get_conn()
-    other = conn.execute("SELECT id FROM users WHERE id != ?", (my_id,)).fetchone()
+    p     = ph()
+    other = qfetchone(f"SELECT id FROM users WHERE id != {p}", (my_id,))
     if not other:
-        conn.close()
         return jsonify({"ok": False})
-    conn.execute("INSERT INTO messages (sender_id,receiver_id,body,timestamp,status) VALUES (?,?,?,?,'sent')",
-                 (my_id, other["id"], body, now_ts()))
-    conn.commit()
-    conn.close()
+    qexec(
+        f"INSERT INTO messages (sender_id,receiver_id,body,timestamp,status) VALUES ({phs(5)})",
+        (my_id, other["id"], body, now_ts(), "sent")
+    )
     return jsonify({"ok": True})
 
 @app.route("/api/typing", methods=["POST"])
@@ -215,10 +312,8 @@ def api_typing():
     if err: return err
     data   = request.get_json(force=True, silent=True) or {}
     typing = 1 if data.get("typing") else 0
-    conn   = get_conn()
-    conn.execute("UPDATE users SET typing=? WHERE id=?", (typing, user["id"]))
-    conn.commit()
-    conn.close()
+    p      = ph()
+    qexec(f"UPDATE users SET typing={p} WHERE id={p}", (typing, user["id"]))
     return jsonify({"ok": True})
 
 @app.route("/api/poll")
@@ -226,15 +321,10 @@ def api_poll():
     user, err = require_auth()
     if err: return jsonify({"logged_in": False}), 401
     my_id = user["id"]
-    conn  = get_conn()
-    # Stamp heartbeat
-    conn.execute("UPDATE users SET last_active=?, online=1 WHERE id=?", (now_dt(), my_id))
-    conn.commit()
-    total = conn.execute("SELECT COUNT(*) as c FROM messages").fetchone()["c"]
-    other = conn.execute(
-        "SELECT last_seen, typing, last_active FROM users WHERE id != ?", (my_id,)
-    ).fetchone()
-    conn.close()
+    p     = ph()
+    qexec(f"UPDATE users SET last_active={p}, online=1 WHERE id={p}", (now_dt(), my_id))
+    total = qfetchone("SELECT COUNT(*) as c FROM messages")["c"]
+    other = qfetchone(f"SELECT last_seen, typing, last_active FROM users WHERE id != {p}", (my_id,))
     return jsonify({
         "logged_in":       True,
         "msg_count":       total,
@@ -247,10 +337,7 @@ def api_poll():
 def api_clear():
     user, err = require_auth()
     if err: return err
-    conn = get_conn()
-    conn.execute("DELETE FROM messages WHERE status='read'")
-    conn.commit()
-    conn.close()
+    qexec("DELETE FROM messages WHERE status='read'")
     return jsonify({"ok": True})
 
 @app.route("/api/clear-beacon", methods=["POST"])
@@ -258,10 +345,7 @@ def api_clear_beacon():
     token = request.args.get("token", "").strip()
     user  = get_user_by_token(token)
     if user:
-        conn = get_conn()
-        conn.execute("DELETE FROM messages WHERE status='read'")
-        conn.commit()
-        conn.close()
+        qexec("DELETE FROM messages WHERE status='read'")
     return "", 204
 
 @app.route("/api/logout-beacon", methods=["POST"])
@@ -269,16 +353,10 @@ def api_logout_beacon():
     token = request.args.get("token", "").strip()
     user  = get_user_by_token(token)
     if user:
-        conn = get_conn()
-        conn.execute("UPDATE users SET token=NULL, online=0, typing=0, last_active=NULL, last_seen=? WHERE id=?",
-                     (now_ts(), user["id"]))
-        conn.commit()
-        conn.close()
+        p = ph()
+        qexec(f"UPDATE users SET token=NULL, online=0, typing=0, last_active=NULL, last_seen={p} WHERE id={p}",
+              (now_ts(), user["id"]))
     return "", 204
-
-@app.route("/keep-alive")
-def keep_alive():
-    return jsonify({"status": "alive"}), 200
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))

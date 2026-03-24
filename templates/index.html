@@ -86,7 +86,39 @@ body {
 .login-footer-row { display: flex; align-items: center; gap: 6px; font-size: 10px; color: rgba(134,150,160,.5); letter-spacing: .3px; }
 .footer-dot { width: 4px; height: 4px; border-radius: 50%; background: rgba(0,168,132,.4); display: inline-block; }
 
-/* ── APP ── */
+/* ── LOCK OVERLAY ── */
+#lock-overlay {
+  display: none; position: fixed; inset: 0; z-index: 999;
+  background: linear-gradient(145deg, #0a0f14 0%, #0d1f2d 50%, #0a1520 100%);
+  align-items: center; justify-content: center; flex-direction: column;
+  cursor: default; user-select: none;
+}
+#lock-overlay::before {
+  content: ""; position: absolute; inset: 0;
+  background-image: linear-gradient(rgba(0,168,132,.04) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(0,168,132,.04) 1px, transparent 1px);
+  background-size: 40px 40px; pointer-events: none;
+}
+#lock-overlay.visible { display: flex; animation: fadeIn .2s ease; }
+.lock-card {
+  background: rgba(15,28,38,.92); border: 1px solid rgba(0,168,132,.2);
+  border-radius: 20px; padding: 44px 38px; width: 360px;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  box-shadow: 0 32px 80px rgba(0,0,0,.7); position: relative; z-index: 1;
+  pointer-events: none;
+}
+.lock-card .login-logo { pointer-events: none; }
+.lock-hint {
+  margin-top: 28px; font-size: 12px; color: rgba(0,168,132,.5);
+  letter-spacing: .5px; text-align: center; position: relative; z-index: 1;
+}
+/* Mobile long-press hint */
+.lock-hint-mobile { display: none; }
+@media (hover: none) {
+  .lock-hint-desktop { display: none; }
+  .lock-hint-mobile  { display: block; }
+}
+
 #app { height: 100vh; height: 100dvh; height: var(--app-height, 100dvh); display: flex; flex-direction: column; }
 #app.hidden { display: none; }
 
@@ -319,6 +351,53 @@ body {
   </div>
 </div>
 
+<!-- LOCK OVERLAY — shown on tab/app switch, dismissed by F4 or Alt+D (desktop) or long-press (mobile) -->
+<div id="lock-overlay">
+  <div class="lock-card">
+    <div class="login-logo">
+      <div class="shield-pulse"></div>
+      <div class="shield-pulse2"></div>
+      <svg viewBox="0 0 76 76" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M38 6L10 18V36C10 52.5 22.5 67.5 38 71C53.5 67.5 66 52.5 66 36V18L38 6Z" fill="rgba(0,168,132,0.12)" stroke="rgba(0,168,132,0.7)" stroke-width="1.5" stroke-linejoin="round"/>
+        <path d="M38 14L18 23.5V37C18 49 27 60 38 63C49 60 58 49 58 37V23.5L38 14Z" fill="rgba(0,168,132,0.08)" stroke="rgba(0,168,132,0.35)" stroke-width="1" stroke-linejoin="round"/>
+        <rect x="27" y="37" width="22" height="16" rx="3" fill="rgba(0,168,132,0.25)" stroke="rgba(0,168,132,0.9)" stroke-width="1.5"/>
+        <path d="M31 37V32C31 27.6 45 27.6 45 32V37" stroke="rgba(0,168,132,0.9)" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+        <circle cx="38" cy="44" r="2.5" fill="rgba(0,168,132,0.9)"/>
+        <rect x="37" y="45" width="2" height="4" rx="1" fill="rgba(0,168,132,0.9)"/>
+      </svg>
+    </div>
+    <div class="login-title">Microsoft SecureAuth</div>
+    <div class="login-sub">Identity Verification Portal</div>
+    <div class="security-badges">
+      <span class="badge">🔒 256-BIT</span>
+      <span class="badge">✦ MFA</span>
+      <span class="badge">⬡ ENCRYPTED</span>
+    </div>
+    <div class="field-group">
+      <label>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        User ID
+      </label>
+      <input type="text" disabled placeholder="Enter your user ID" style="opacity:.4;cursor:default;pointer-events:none;"/>
+    </div>
+    <div class="field-group">
+      <label>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        Access Key
+      </label>
+      <input type="password" disabled placeholder="Enter your access key" style="opacity:.4;cursor:default;pointer-events:none;"/>
+    </div>
+    <button disabled style="width:100%;padding:13px;color:#fff;border:none;border-radius:9px;font-family:var(--font);font-size:13px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;background:linear-gradient(135deg,#007a60 0%,#00a884 100%);opacity:.5;cursor:default;display:flex;align-items:center;justify-content:center;gap:8px;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      VERIFY &amp; AUTHENTICATE
+    </button>
+  </div>
+  <div class="lock-hint">
+    <span class="lock-hint-desktop">Press <strong>Alt+D</strong> or <strong>F4</strong> to unlock</span>
+    <span class="lock-hint-mobile">Hold screen to unlock</span>
+  </div>
+</div>
+
 <script>
 // ── State ──────────────────────────────────────────────────────────────────────
 let authToken  = localStorage.getItem("nexchat_token") || null;
@@ -442,6 +521,7 @@ async function initApp() {
   if (inIds.length) lastIncomingMsgId = Math.max(...inIds);
   await loadMessages();
   startPolling();
+  pushSentinel(); // enables back-button logout
 }
 
 // ── Status ─────────────────────────────────────────────────────────────────────
@@ -659,20 +739,6 @@ document.getElementById("fmt-emoji").addEventListener("click", e => {
 });
 document.addEventListener("click", () => document.getElementById("emoji-picker").classList.remove("open"));
 
-// ── Keyboard decrypt shortcut (Alt+D or F4) ────────────────────────────────────
-document.addEventListener("keydown", e => {
-  const isAltD = e.altKey && e.key === "d";
-  const isF4   = e.key === "F4" && !e.ctrlKey && !e.shiftKey && !e.metaKey;
-  if (!isAltD && !isF4) return;
-  e.preventDefault();
-  const selected = document.querySelector(".bubble.encrypted.selected");
-  if (!selected) return;
-  const msgId = parseInt(selected.dataset.msgId), msgBody = selected.dataset.msgBody;
-  if (!msgBody || !msgId) return;
-  selected.classList.remove("selected");
-  revealBubble(selected, msgBody, msgId);
-});
-
 // ── Header buttons ─────────────────────────────────────────────────────────────
 document.getElementById("mute-btn").addEventListener("click", () => {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -691,18 +757,102 @@ document.getElementById("modal-confirm").addEventListener("click", async () => {
   await loadMessages();
 });
 
-// ── Logout ─────────────────────────────────────────────────────────────────────
-document.getElementById("logout-btn").addEventListener("click", async () => {
+// ── Lock Overlay ───────────────────────────────────────────────────────────────
+
+function showLock() {
+  if (!authToken) return;  // only lock if logged in
+  document.getElementById("lock-overlay").classList.add("visible");
+}
+
+function hideLock() {
+  document.getElementById("lock-overlay").classList.remove("visible");
+}
+
+function isLocked() {
+  return document.getElementById("lock-overlay").classList.contains("visible");
+}
+
+// Show lock on tab switch or app switch (any visibility change)
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden" && authToken) {
+    showLock();
+  }
+});
+
+// Also lock on window blur (Alt+Tab to another app on desktop)
+window.addEventListener("blur", () => {
+  if (authToken) showLock();
+});
+
+// Desktop: unlock with Alt+D or F4
+document.addEventListener("keydown", e => {
+  if (isLocked()) {
+    const isAltD = e.altKey && e.key === "d";
+    const isF4   = e.key === "F4" && !e.ctrlKey && !e.shiftKey && !e.metaKey;
+    if (isAltD || isF4) {
+      e.preventDefault();
+      hideLock();
+    }
+    return; // block all other keys while locked
+  }
+
+  // Existing decrypt shortcut (only when not locked)
+  const isAltD = e.altKey && e.key === "d";
+  const isF4   = e.key === "F4" && !e.ctrlKey && !e.shiftKey && !e.metaKey;
+  if (!isAltD && !isF4) return;
+  e.preventDefault();
+  const selected = document.querySelector(".bubble.encrypted.selected");
+  if (!selected) return;
+  const msgId = parseInt(selected.dataset.msgId), msgBody = selected.dataset.msgBody;
+  if (!msgBody || !msgId) return;
+  selected.classList.remove("selected");
+  revealBubble(selected, msgBody, msgId);
+});
+
+// Mobile: long-press anywhere on lock overlay to unlock (hold 1.5s)
+const lockOverlay = document.getElementById("lock-overlay");
+let mobileLockTimer = null;
+lockOverlay.addEventListener("touchstart", () => {
+  mobileLockTimer = setTimeout(() => { hideLock(); }, 1500);
+}, {passive: true});
+lockOverlay.addEventListener("touchend",  () => clearTimeout(mobileLockTimer), {passive: true});
+lockOverlay.addEventListener("touchmove", () => clearTimeout(mobileLockTimer), {passive: true});
+
+// Block any clicks on the lock overlay from passing through
+lockOverlay.addEventListener("click", e => e.stopPropagation());
+
+// ── Back button → logout ────────────────────────────────────────────────────────
+// Push a sentinel state on login so back button has something to pop
+function pushSentinel() {
+  history.pushState({nexchat: "active"}, "", window.location.href);
+}
+
+window.addEventListener("popstate", async (e) => {
+  if (!authToken) {
+    history.replaceState(null, "", "/logged-out");
+    showLogin();
+    return;
+  }
+  // User pressed back while logged in — logout
   if (pollTimer) clearInterval(pollTimer);
   document.title = BASE_TITLE;
+  hideLock();
   await api("/api/clear",  {method:"POST"}).catch(()=>{});
   await api("/logout",     {method:"POST"}).catch(()=>{});
   clearAuth();
-  const steps = history.length - 1;
-  if (steps > 0) { history.go(-steps); setTimeout(() => { history.replaceState(null,"","/logged-out"); showLogin(); }, 100); }
-  else { history.replaceState(null,"","/logged-out"); showLogin(); }
+  history.replaceState(null, "", "/logged-out");
+  showLogin();
 });
-window.addEventListener("popstate", () => { if (!authToken) { history.replaceState(null,"","/logged-out"); showLogin(); } });
+document.getElementById("logout-btn").addEventListener("click", async () => {
+  if (pollTimer) clearInterval(pollTimer);
+  document.title = BASE_TITLE;
+  hideLock();
+  await api("/api/clear",  {method:"POST"}).catch(()=>{});
+  await api("/logout",     {method:"POST"}).catch(()=>{});
+  clearAuth();
+  history.replaceState(null, "", "/logged-out");
+  showLogin();
+});
 
 function showLogin() {
   if (pollTimer) clearInterval(pollTimer);
