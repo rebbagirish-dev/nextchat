@@ -112,12 +112,6 @@ body {
   margin-top: 28px; font-size: 12px; color: rgba(0,168,132,.5);
   letter-spacing: .5px; text-align: center; position: relative; z-index: 1;
 }
-/* Mobile long-press hint */
-.lock-hint-mobile { display: none; }
-@media (hover: none) {
-  .lock-hint-desktop { display: none; }
-  .lock-hint-mobile  { display: block; }
-}
 
 #app { height: 100vh; height: 100dvh; height: var(--app-height, 100dvh); display: flex; flex-direction: column; }
 #app.hidden { display: none; }
@@ -392,10 +386,7 @@ body {
       VERIFY &amp; AUTHENTICATE
     </button>
   </div>
-  <div class="lock-hint">
-    <span class="lock-hint-desktop">Press <strong>Alt+D</strong> or <strong>F4</strong> to unlock</span>
-    <span class="lock-hint-mobile">Hold screen to unlock</span>
-  </div>
+  <div class="lock-hint">Use shortcut to unlock</div>
 </div>
 
 <script>
