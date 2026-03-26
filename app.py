@@ -337,14 +337,6 @@ def api_clear():
     qexec("DELETE FROM messages")
     return jsonify({"ok": True})
 
-@app.route("/api/clear-beacon", methods=["POST"])
-def api_clear_beacon():
-    token = request.args.get("token", "").strip()
-    user  = get_user_by_token(token)
-    if user:
-        qexec("DELETE FROM messages")
-    return "", 204
-
 @app.route("/api/logout-beacon", methods=["POST"])
 def api_logout_beacon():
     token = request.args.get("token", "").strip()

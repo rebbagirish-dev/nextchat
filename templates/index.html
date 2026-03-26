@@ -932,8 +932,7 @@ window.addEventListener("popstate", async (e) => {
   if (pollTimer) clearInterval(pollTimer);
   document.title = BASE_TITLE;
   hideLock();
-  await api("/api/clear",  {method:"POST"}).catch(()=>{});
-  await api("/logout",     {method:"POST"}).catch(()=>{});
+  await api("/logout", {method:"POST"}).catch(()=>{});
   clearAuth();
   history.replaceState(null, "", "/logged-out");
   showLogin();
@@ -962,7 +961,6 @@ function showLogin() {
 window.addEventListener("beforeunload", () => {
   if (!authToken) return;
   const blob = new Blob([JSON.stringify({})], {type:"application/json"});
-  navigator.sendBeacon("/api/clear-beacon?token="  + encodeURIComponent(authToken), blob);
   navigator.sendBeacon("/api/logout-beacon?token=" + encodeURIComponent(authToken), blob);
   clearAuth();
 });
