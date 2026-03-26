@@ -283,6 +283,22 @@ html:not(.light) {
 @keyframes xlRowIn   {from{opacity:0;transform:translateX(-3px)}to{opacity:1;transform:none}}
 .hidden { display:none !important; }
 
+/* Hamburger menu */
+.hamburger-btn { padding: 4px 8px; }
+.hamburger-menu { min-width: 200px; }
+.hamburger-header { padding: 8px 14px 4px; font-size: 11px; font-weight: 700; color: var(--xl-sub); text-transform: uppercase; letter-spacing: .5px; border-bottom: 1px solid var(--xl-border); margin-bottom: 2px; font-family:'Calibri',sans-serif; }
+
+/* Hide desktop-only buttons on mobile, show hamburger always */
+@media (min-width: 600px) {
+  .hamburger-btn { display: none; }
+  #hamburger-dropdown { display: none; }
+}
+@media (max-width: 599px) {
+  .desktop-only { display: none !important; }
+  .xl-ribbon-tabs { display: none; }
+  .xl-title { font-size: 11px; }
+}
+
 @media (max-width:480px){
   .xl-cell-a{width:52px;min-width:52px} .xl-cell-b{width:60px;min-width:60px}
   .xl-cell-d{width:42px;min-width:42px} .xl-row-num{width:28px;min-width:28px}
@@ -345,7 +361,7 @@ html:not(.light) {
 
   <!-- Ribbon (top bar like Excel) -->
   <div class="xl-ribbon">
-    <div class="xl-ribbon-tabs">
+    <div class="xl-ribbon-tabs" id="xl-ribbon-tabs">
       <button class="xl-tab active">Home</button>
       <button class="xl-tab">Insert</button>
       <button class="xl-tab">Data</button>
@@ -353,13 +369,32 @@ html:not(.light) {
     </div>
     <div class="xl-title">WorkLog — <span id="other-name">—</span>.xlsx</div>
     <div class="xl-ribbon-btns">
-      <button class="xl-icon-btn" id="theme-btn" title="Toggle theme">🌙</button>
-      <button class="xl-icon-btn" id="header-clear-btn" title="Clear">🗑</button>
-      <button class="xl-icon-btn" id="mute-btn" title="Mute">🔔</button>
-      <div class="dropdown" id="menu-dropdown">
+      <!-- Desktop buttons (hidden on mobile) -->
+      <button class="xl-icon-btn desktop-only" id="theme-btn" title="Toggle theme">🌙</button>
+      <button class="xl-icon-btn desktop-only" id="header-clear-btn" title="Clear">🗑</button>
+      <button class="xl-icon-btn desktop-only" id="mute-btn" title="Mute">🔔</button>
+      <div class="dropdown desktop-only" id="menu-dropdown">
         <button class="xl-icon-btn" id="menu-btn">⋮</button>
         <div class="dropdown-menu" id="dropdown-menu">
           <button id="logout-btn" class="danger">🚪&nbsp; Sign Out</button>
+        </div>
+      </div>
+      <!-- Hamburger menu (always visible, contains all options) -->
+      <div class="dropdown" id="hamburger-dropdown">
+        <button class="xl-icon-btn hamburger-btn" id="hamburger-btn" title="Menu">
+          <svg width="18" height="14" viewBox="0 0 18 14" fill="none">
+            <rect y="0"  width="18" height="2" rx="1" fill="white"/>
+            <rect y="6"  width="18" height="2" rx="1" fill="white"/>
+            <rect y="12" width="18" height="2" rx="1" fill="white"/>
+          </svg>
+        </button>
+        <div class="dropdown-menu hamburger-menu" id="hamburger-menu">
+          <div class="hamburger-header">Menu</div>
+          <button id="hm-theme-btn">🌙&nbsp; <span id="hm-theme-label">Switch to Light</span></button>
+          <button id="hm-mute-btn">🔔&nbsp; <span id="hm-mute-label">Mute Notifications</span></button>
+          <button id="hm-clear-btn">🗑&nbsp; Clear History</button>
+          <hr/>
+          <button id="hm-logout-btn" class="danger">🚪&nbsp; Sign Out</button>
         </div>
       </div>
     </div>
@@ -838,16 +873,56 @@ document.getElementById("fmt-emoji").addEventListener("click", e => {
 document.addEventListener("click", () => document.getElementById("emoji-picker").classList.remove("open"));
 
 // ── Header buttons ─────────────────────────────────────────────────────────────
-document.getElementById("mute-btn").addEventListener("click", () => {
+function applyThemeBtn() {
+  const label = document.getElementById("hm-theme-label");
+  if (label) label.textContent = isLight ? "Switch to Dark" : "Switch to Light";
+  const tb = document.getElementById("theme-btn");
+  if (tb) tb.textContent = isLight ? "☀️" : "🌙";
+  const hmtb = document.getElementById("hm-theme-btn");
+  if (hmtb) hmtb.firstChild.textContent = isLight ? "☀️\u00a0" : "🌙\u00a0";
+}
+
+function toggleTheme() {
+  isLight = !isLight;
+  localStorage.setItem("nexchat_theme", isLight ? "light" : "dark");
+  applyTheme();
+  applyThemeBtn();
+}
+
+function toggleMute() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   if (audioCtx.state === "suspended") audioCtx.resume();
   isMuted = !isMuted;
   localStorage.setItem("nexchat_muted", isMuted);
   updateMuteBtn();
-});
+  const label = document.getElementById("hm-mute-label");
+  if (label) label.textContent = isMuted ? "Unmute Notifications" : "Mute Notifications";
+}
+
+// Desktop buttons
+document.getElementById("theme-btn").addEventListener("click", toggleTheme);
+document.getElementById("mute-btn").addEventListener("click", toggleMute);
 document.getElementById("header-clear-btn").addEventListener("click", () => document.getElementById("clear-modal").classList.add("open"));
 document.getElementById("menu-btn").addEventListener("click", e => { e.stopPropagation(); document.getElementById("dropdown-menu").classList.toggle("open"); });
-document.addEventListener("click", () => document.getElementById("dropdown-menu").classList.remove("open"));
+
+// Hamburger menu
+document.getElementById("hamburger-btn").addEventListener("click", e => { e.stopPropagation(); document.getElementById("hamburger-menu").classList.toggle("open"); });
+document.getElementById("hm-theme-btn") .addEventListener("click", () => { toggleTheme(); document.getElementById("hamburger-menu").classList.remove("open"); });
+document.getElementById("hm-mute-btn")  .addEventListener("click", () => { toggleMute();  document.getElementById("hamburger-menu").classList.remove("open"); });
+document.getElementById("hm-clear-btn") .addEventListener("click", () => { document.getElementById("hamburger-menu").classList.remove("open"); document.getElementById("clear-modal").classList.add("open"); });
+document.getElementById("hm-logout-btn").addEventListener("click", async () => {
+  document.getElementById("hamburger-menu").classList.remove("open");
+  if (pollTimer) clearInterval(pollTimer);
+  document.title = BASE_TITLE; hideLock();
+  await api("/api/clear", {method:"POST"}).catch(()=>{});
+  await api("/logout",    {method:"POST"}).catch(()=>{});
+  clearAuth(); history.replaceState(null,"","/logged-out"); showLogin();
+});
+
+document.addEventListener("click", () => {
+  document.getElementById("dropdown-menu").classList.remove("open");
+  document.getElementById("hamburger-menu").classList.remove("open");
+});
 document.getElementById("modal-cancel") .addEventListener("click", () => document.getElementById("clear-modal").classList.remove("open"));
 document.getElementById("modal-confirm").addEventListener("click", async () => {
   await api("/api/clear", {method:"POST"});
@@ -983,24 +1058,15 @@ let isLight = localStorage.getItem("nexchat_theme") === "light";
 function applyTheme() {
   if (isLight) {
     document.documentElement.classList.add("light");
-    document.getElementById("theme-btn").textContent = "☀️";
-    document.getElementById("theme-btn").title = "Switch to dark theme";
   } else {
     document.documentElement.classList.remove("light");
-    document.getElementById("theme-btn").textContent = "🌙";
-    document.getElementById("theme-btn").title = "Switch to light theme";
   }
 }
-
-document.getElementById("theme-btn").addEventListener("click", () => {
-  isLight = !isLight;
-  localStorage.setItem("nexchat_theme", isLight ? "light" : "dark");
-  applyTheme();
-});
 
 // ── Boot ───────────────────────────────────────────────────────────────────────
 applyTheme();
 updateMuteBtn();
+// applyThemeBtn called after DOM ready via header buttons section
 document.title = BASE_TITLE;
 (async () => { if (authToken) await initApp(); })();
 </script>
