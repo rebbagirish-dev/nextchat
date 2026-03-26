@@ -274,12 +274,9 @@ def api_messages():
     if not other:
         return jsonify([])
     other_id = other["id"]
-    qexec_many([
-        (f"UPDATE messages SET status='delivered' WHERE sender_id={p} AND receiver_id={p} AND status='sent'",
-         (other_id, my_id)),
-        (f"UPDATE messages SET status='read' WHERE sender_id={p} AND receiver_id={p} AND status='delivered'",
-         (other_id, my_id)),
-    ])
+    # Mark incoming messages as delivered (not read — read only on explicit view)
+    qexec(f"UPDATE messages SET status='delivered' WHERE sender_id={p} AND receiver_id={p} AND status='sent'",
+          (other_id, my_id))
     rows = qfetch(f"""
         SELECT id, sender_id, body, timestamp, status FROM messages
         WHERE (sender_id={p} AND receiver_id={p}) OR (sender_id={p} AND receiver_id={p})

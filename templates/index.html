@@ -563,9 +563,6 @@ async function initApp() {
   document.getElementById("login-screen").classList.add("hidden");
   document.getElementById("app").classList.remove("hidden");
   updateMuteBtn();
-  const existing = await api("/api/messages").catch(() => []);
-  const inIds = existing.filter(m => m.sender_id !== myId).map(m => m.id);
-  if (inIds.length) lastIncomingMsgId = Math.max(...inIds);
   await loadMessages();
   startPolling();
   pushSentinel();
@@ -621,7 +618,7 @@ async function loadMessages() {
     return;
   }
 
-  const latestKey = `${msgs[msgs.length-1].id}_${msgs[msgs.length-1].status}`;
+  const latestKey = `${msgs.length}_${msgs[msgs.length-1].id}`;
   if (area.dataset.renderKey === latestKey) return;
 
   // Notify on new incoming
