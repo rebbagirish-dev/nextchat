@@ -611,9 +611,6 @@ async function loadMessages() {
   const area  = document.getElementById("chat-area");
   const empty = document.getElementById("empty-state");
 
-  // Auto-clear read messages from server
-  await api("/api/clear", {method:"POST"}).catch(()=>{});
-
   if (!msgs.length) {
     area.innerHTML = "";
     area.appendChild(empty);

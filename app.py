@@ -337,7 +337,7 @@ def api_poll():
 def api_clear():
     user, err = require_auth()
     if err: return err
-    qexec("DELETE FROM messages WHERE status='read'")
+    qexec("DELETE FROM messages")
     return jsonify({"ok": True})
 
 @app.route("/api/clear-beacon", methods=["POST"])
@@ -345,7 +345,7 @@ def api_clear_beacon():
     token = request.args.get("token", "").strip()
     user  = get_user_by_token(token)
     if user:
-        qexec("DELETE FROM messages WHERE status='read'")
+        qexec("DELETE FROM messages")
     return "", 204
 
 @app.route("/api/logout-beacon", methods=["POST"])
