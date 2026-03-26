@@ -556,8 +556,9 @@ async function initApp() {
   const me = await api("/api/me").catch(() => ({logged_in:false}));
   if (!me.logged_in) { clearAuth(); showLogin(); return; }
   const other = await api("/api/other").catch(() => ({}));
-  document.getElementById("other-name").textContent   = other.username || "—";
-  document.getElementById("other-avatar").textContent = (other.username||"?")[0].toUpperCase();
+  document.getElementById("other-name").textContent = other.username || "—";
+  const collabName = document.getElementById("xl-collab-name");
+  if (collabName) collabName.textContent = other.username || "—";
   updateStatus(other.online, other.last_seen);
   document.getElementById("login-screen").classList.add("hidden");
   document.getElementById("app").classList.remove("hidden");
@@ -569,7 +570,7 @@ async function initApp() {
   startPolling();
   pushSentinel();
   const su = document.getElementById("xl-status-user");
-  if (su) su.textContent = "User: " + (myUsername || "—"); // enables back-button logout
+  if (su) su.textContent = "User: " + (myUsername || "—");
 }
 
 // ── Status ─────────────────────────────────────────────────────────────────────
