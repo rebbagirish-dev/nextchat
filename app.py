@@ -2,7 +2,7 @@
 NexChat - Flask Web App
 Uses PostgreSQL on Render (DATABASE_URL env var), SQLite locally.
 """
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_from_directory
 import hashlib, datetime, os, secrets
 
 app = Flask(__name__)
@@ -195,6 +195,22 @@ def require_auth():
 @app.route("/")
 def index():
     return render_template("index.html")
+
+@app.route("/manifest.json")
+def manifest():
+    return send_from_directory("static", "manifest.json", mimetype="application/manifest+json")
+
+@app.route("/sw.js")
+def service_worker():
+    return send_from_directory("static", "sw.js", mimetype="application/javascript")
+
+@app.route("/manifest.json")
+def manifest():
+    return app.send_static_file("manifest.json"), 200, {"Content-Type": "application/manifest+json"}
+
+@app.route("/sw.js")
+def service_worker():
+    return app.send_static_file("sw.js"), 200, {"Content-Type": "application/javascript", "Service-Worker-Allowed": "/"}
 
 @app.route("/health")
 def health():

@@ -4,6 +4,13 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content"/>
 <title>Microsoft Authenticator</title>
+<link rel="manifest" href="/manifest.json"/>
+<meta name="theme-color" content="#217346"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="Microsoft Authenticator"/>
+<link rel="apple-touch-icon" href="/static/icon-192.png"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
 <style>
@@ -1048,6 +1055,18 @@ window.addEventListener("resize", setAppHeight);
 window.addEventListener("orientationchange", () => setTimeout(setAppHeight, 200));
 document.getElementById("msg-input").addEventListener("focus",  () => { setTimeout(() => { setAppHeight(); const a=document.getElementById("chat-area"); if(a)a.scrollTop=a.scrollHeight; }, 350); });
 document.getElementById("msg-input").addEventListener("blur",   () => setTimeout(setAppHeight, 300));
+
+// ── PWA Service Worker ─────────────────────────────────────────────────────────
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/sw.js").catch(() => {});
+}
+
+// ── Service Worker (PWA) ───────────────────────────────────────────────────────
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  });
+}
 
 // ── Keep-alive ping (prevents Render free tier from sleeping) ─────────────────
 setInterval(() => fetch("/keep-alive").catch(() => {}), 10 * 60 * 1000);
