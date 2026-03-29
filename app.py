@@ -1,6 +1,6 @@
 """
 NexChat - Flask Web App
-Uses PostgreSQL on Render (DATABASE_URL env var), SQLite locally.
+Uses PostgreSQL when DATABASE_URL env var is set, SQLite otherwise.
 """
 from flask import Flask, render_template, request, jsonify, send_from_directory
 import hashlib, datetime, os, secrets
@@ -11,22 +11,27 @@ app = Flask(__name__)
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
 if DATABASE_URL:
-    # PostgreSQL (Render)
-    import psycopg2
-    import psycopg2.extras
+    try:
+        import psycopg2
+        import psycopg2.extras
 
-    def get_conn():
-        conn = psycopg2.connect(DATABASE_URL, sslmode="require")
-        return conn
+        def get_conn():
+            conn = psycopg2.connect(DATABASE_URL, sslmode="require")
+            return conn
 
-    def get_cursor(conn):
-        return conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        def get_cursor(conn):
+            return conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
-    PG = True
-else:
-    # SQLite (local)
+        PG = True
+    except ImportError:
+        DATABASE_URL = ""  # fallback to SQLite
+        PG = False
+
+if not DATABASE_URL:
+    # SQLite (Railway / local)
     import sqlite3
-    DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "nexchat.db")
+    DB_PATH = "/tmp/nexchat.db" if os.environ.get("RAILWAY_ENVIRONMENT") \
+              else os.path.join(os.path.dirname(os.path.abspath(__file__)), "nexchat.db")
 
     def get_conn():
         conn = sqlite3.connect(DB_PATH, check_same_thread=False)
