@@ -209,14 +209,6 @@ def manifest():
 def service_worker():
     return send_from_directory("static", "sw.js", mimetype="application/javascript")
 
-@app.route("/manifest.json")
-def manifest():
-    return app.send_static_file("manifest.json"), 200, {"Content-Type": "application/manifest+json"}
-
-@app.route("/sw.js")
-def service_worker():
-    return app.send_static_file("sw.js"), 200, {"Content-Type": "application/javascript", "Service-Worker-Allowed": "/"}
-
 @app.route("/health")
 def health():
     return jsonify({"status": "ok"}), 200
