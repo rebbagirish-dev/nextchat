@@ -956,18 +956,6 @@ function isLocked() {
   return document.getElementById("lock-overlay").classList.contains("visible");
 }
 
-// Show lock on tab switch or app switch (any visibility change)
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "hidden" && authToken) {
-    showLock();
-  }
-});
-
-// Also lock on window blur (Alt+Tab to another app on desktop)
-window.addEventListener("blur", () => {
-  if (authToken) showLock();
-});
-
 // Desktop: unlock with Alt+D or F4
 document.addEventListener("keydown", e => {
   if (isLocked()) {
@@ -1050,8 +1038,6 @@ window.addEventListener("beforeunload", () => {
   navigator.sendBeacon("/api/logout-beacon?token=" + encodeURIComponent(authToken), blob);
   clearAuth();
 });
-window.addEventListener("focus", () => { document.title = BASE_TITLE; });
-
 // ── Mobile height fix ──────────────────────────────────────────────────────────
 function setAppHeight() { document.documentElement.style.setProperty("--app-height", window.innerHeight+"px"); }
 setAppHeight();
@@ -1065,16 +1051,34 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").catch(() => {});
 }
 
-// ── Hide from recent tasks — show lock screen before Android takes screenshot ──
-// Android takes a screenshot for recent tasks on visibilitychange/blur.
-// By showing the lock overlay instantly, the screenshot captured = lock screen,
-// not the chat content. Combined with the lock overlay functionality.
+// ── Hide from recent tasks ─────────────────────────────────────────────────────
+// Android/Chrome captures a screenshot for recent tasks the moment the app
+// is backgrounded. We show the lock overlay INSTANTLY on both blur and
+// visibilitychange so the captured thumbnail = our lock screen, not the chat.
+// A transparent full-screen div is placed on top first (before lock renders)
+// to ensure no chat content is ever captured.
+const _recentsShield = document.createElement("div");
+_recentsShield.style.cssText = "display:none;position:fixed;inset:0;z-index:998;background:#0d1f2d;";
+document.body.appendChild(_recentsShield);
+
+function _shieldRecents() {
+  if (!authToken) return;
+  _recentsShield.style.display = "block";  // instant black cover
+  showLock();                               // show proper lock overlay
+  requestAnimationFrame(() => {
+    _recentsShield.style.display = "none"; // remove black once lock is shown
+  });
+}
+function _unshieldRecents() {
+  _recentsShield.style.display = "none";
+}
+
+// Both events needed: blur fires on app-switch, visibilitychange on tab-switch
+window.addEventListener("blur",            () => _shieldRecents());
+window.addEventListener("focus",           () => { _unshieldRecents(); document.title = BASE_TITLE; });
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "hidden" && authToken) {
-    showLock();
-    // Blank the page title so recents shows generic name
-    document.title = "Microsoft Authenticator";
-  }
+  if (document.visibilityState === "hidden") _shieldRecents();
+  else { _unshieldRecents(); document.title = BASE_TITLE; }
 });
 
 // ── Service Worker (PWA) ───────────────────────────────────────────────────────
