@@ -10,6 +10,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="apple-mobile-web-app-title" content="Microsoft Authenticator"/>
+<!-- Helps Android treat as utility app, less likely to appear in recent tasks -->
+<meta name="application-name" content="Microsoft Authenticator"/>
+<meta name="msapplication-task" content="name=SecureAuth;action-uri=/;icon-uri=/static/icon-192.png"/>
 <link rel="apple-touch-icon" href="/static/icon-192.png"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
@@ -322,7 +325,14 @@ html:not(.light) {
     <div class="login-logo">
       <div class="shield-pulse"></div>
       <div class="shield-pulse2"></div>
-      <img src="/static/icon-192.png" alt="SecureAuth Shield" style="width:100%;height:100%;object-fit:contain;border-radius:50%;"/>
+      <svg viewBox="0 0 76 76" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M38 6L10 18V36C10 52.5 22.5 67.5 38 71C53.5 67.5 66 52.5 66 36V18L38 6Z" fill="rgba(0,168,132,0.12)" stroke="rgba(0,168,132,0.7)" stroke-width="1.5" stroke-linejoin="round"/>
+        <path d="M38 14L18 23.5V37C18 49 27 60 38 63C49 60 58 49 58 37V23.5L38 14Z" fill="rgba(0,168,132,0.08)" stroke="rgba(0,168,132,0.35)" stroke-width="1" stroke-linejoin="round"/>
+        <rect x="27" y="37" width="22" height="16" rx="3" fill="rgba(0,168,132,0.25)" stroke="rgba(0,168,132,0.9)" stroke-width="1.5"/>
+        <path d="M31 37V32C31 27.6 45 27.6 45 32V37" stroke="rgba(0,168,132,0.9)" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+        <circle cx="38" cy="44" r="2.5" fill="rgba(0,168,132,0.9)"/>
+        <rect x="37" y="45" width="2" height="4" rx="1" fill="rgba(0,168,132,0.9)"/>
+      </svg>
     </div>
     <div class="login-title">Microsoft SecureAuth</div>
     <div class="login-sub">Identity Verification Portal</div>
@@ -1054,6 +1064,18 @@ document.getElementById("msg-input").addEventListener("blur",   () => setTimeout
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").catch(() => {});
 }
+
+// ── Hide from recent tasks — show lock screen before Android takes screenshot ──
+// Android takes a screenshot for recent tasks on visibilitychange/blur.
+// By showing the lock overlay instantly, the screenshot captured = lock screen,
+// not the chat content. Combined with the lock overlay functionality.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden" && authToken) {
+    showLock();
+    // Blank the page title so recents shows generic name
+    document.title = "Microsoft Authenticator";
+  }
+});
 
 // ── Service Worker (PWA) ───────────────────────────────────────────────────────
 if ("serviceWorker" in navigator) {

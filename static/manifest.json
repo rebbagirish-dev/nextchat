@@ -5,8 +5,10 @@
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#1a5c38",
+  "background_color": "#0d1f2d",
   "theme_color": "#217346",
+  "categories": ["productivity", "utilities"],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/static/icon-192.png",
