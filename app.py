@@ -6,6 +6,7 @@ from flask import Flask, render_template, request, jsonify, send_from_directory
 import hashlib, datetime, os, secrets
 
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # 10MB max per request
 
 # ── DB backend selection ───────────────────────────────────────────────────────
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
@@ -302,7 +303,10 @@ def api_send():
     user, err = require_auth()
     if err: return err
     data = request.get_json(force=True, silent=True) or {}
-    body = data.get("body", "").strip()
+    body = data.get("body", "")
+    # Don't strip image data; strip only text messages
+    if not body.startswith("[IMG]"):
+        body = body.strip()
     if not body:
         return jsonify({"ok": False, "error": "Empty message"})
     my_id = user["id"]
