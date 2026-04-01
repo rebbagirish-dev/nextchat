@@ -74,7 +74,7 @@ def init_db():
             )
         """)
         # Seed users
-        for uname, pwd in [("alice", "Shutterflies1!"), ("bob", "Shutterflies1!")]:
+        for uname, pwd in [("benjamin", "Shutterflies1!"), ("bob", "Shutterflies1!")]:
             pw_hash = hashlib.sha256(pwd.encode()).hexdigest()
             cur.execute("""
                 INSERT INTO users (username, password)
@@ -102,7 +102,7 @@ def init_db():
                 status      TEXT DEFAULT 'sent'
             );
         """)
-        for uname, pwd in [("alice", "Shutterflies1!"), ("bob", "Shutterflies1!")]:
+        for uname, pwd in [("benjamin", "Shutterflies1!"), ("bob", "Shutterflies1!")]:
             pw_hash = hashlib.sha256(pwd.encode()).hexdigest()
             cur.execute("INSERT OR IGNORE INTO users (username, password) VALUES (?,?)",
                         (uname, pw_hash))

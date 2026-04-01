@@ -147,13 +147,17 @@ body {
 .lock-img-wrap {
   position: fixed; inset: 0;
   pointer-events: none;
+  background: #1a3a5c;  /* MS blue background for letterboxing on desktop */
+  display: flex; align-items: center; justify-content: center;
 }
 .lock-img-wrap img {
   width: 100%; height: 100%;
-  object-fit: cover; object-position: center;
+  object-fit: contain;  /* show full image, no cropping */
+  object-position: center;
   display: block;
   pointer-events: none; user-select: none;
   -webkit-user-drag: none;
+  max-width: 100%; max-height: 100%;
 }
 /* ── APP SHELL ── */
 #app { height:100vh; height:100dvh; height:var(--app-height,100dvh); display:flex; flex-direction:column; background:var(--xl-bg); font-family:'Calibri','DM Sans',sans-serif; }
@@ -279,7 +283,10 @@ html:not(.light) {
   color: #fff; font-size: 28px; background: none; border: none;
   cursor: pointer; opacity: .7; line-height: 1;
 }
-#img-lightbox-close:hover { opacity: 1; } background:var(--xl-sel); display:flex; align-items:center; padding:2px 10px; height:20px; flex-shrink:0; gap:16px; }
+#img-lightbox-close:hover { opacity: 1; }
+
+/* Status bar */
+.xl-status-bar { background:var(--xl-sel); display:flex; align-items:center; padding:2px 10px; height:20px; flex-shrink:0; gap:16px; }
 .xl-status-bar span { font-size:11px; color:rgba(255,255,255,.8); font-family:'Calibri',sans-serif; }
 .xl-status-bar .xl-online { color:#fff; font-weight:600; }
 
