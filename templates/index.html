@@ -241,13 +241,13 @@ html:not(.light) {
 @keyframes xlReveal{0%{opacity:0}100%{opacity:1}}
 
 /* Toolbar */
-.xl-toolbar { background:var(--xl-header-row); border-top:1px solid var(--xl-border); display:flex; align-items:center; gap:2px; padding:2px 6px; flex-shrink:0; }
+.xl-toolbar { background:var(--xl-header-row); border-bottom:1px solid var(--xl-border); display:flex; align-items:center; gap:2px; padding:2px 6px; flex-shrink:0; }
 .xl-fmt-btn { background:none; border:1px solid transparent; color:var(--xl-sub); font-size:12px; font-weight:700; cursor:pointer; padding:2px 6px; border-radius:2px; transition:background .1s; font-family:'Calibri',sans-serif; line-height:1.4; }
 .xl-fmt-btn:hover { background:var(--xl-cell); border-color:var(--xl-border); }
 .xl-fmt-sep { width:1px; height:13px; background:var(--xl-border); margin:0 4px; }
 
 /* Input */
-.xl-input-row { display:flex; align-items:center; background:var(--xl-formula); border-top:2px solid var(--xl-sel); padding:4px 8px; gap:6px; flex-shrink:0; padding-bottom:max(4px,env(safe-area-inset-bottom)); position:relative; }
+.xl-input-row { display:flex; align-items:center; background:var(--xl-formula); border-bottom:2px solid var(--xl-sel); padding:4px 8px; gap:6px; flex-shrink:0; padding-bottom:max(4px,env(safe-area-inset-bottom)); position:relative; }
 #msg-input { flex:1; border:1px solid var(--xl-border); border-radius:2px; padding:5px 8px; font-family:'Calibri',sans-serif; font-size:13px; color:var(--xl-text); outline:none; resize:none; max-height:80px; overflow-y:auto; line-height:1.4; background:var(--xl-cell); -webkit-appearance:none; }
 #msg-input:focus { border-color:var(--xl-sel); box-shadow:0 0 0 1px var(--xl-sel); }
 #msg-input::placeholder { color:#aaa; }
@@ -255,7 +255,7 @@ html:not(.light) {
 .xl-send-btn:hover { background:var(--xl-ribbon2); }
 
 /* Emoji */
-.emoji-picker { display:none; position:absolute; bottom:100%; left:0; right:0; background:var(--xl-formula); border:1px solid var(--xl-border); padding:8px; max-height:200px; overflow-y:auto; flex-wrap:wrap; gap:2px; z-index:50; }
+.emoji-picker { display:none; position:absolute; top:100%; left:0; right:0; background:var(--xl-formula); border:1px solid var(--xl-border); padding:8px; max-height:200px; overflow-y:auto; flex-wrap:wrap; gap:2px; z-index:50; }
 .emoji-picker.open { display:flex; }
 .emoji-cat { width:100%; font-size:10px; color:var(--xl-sub); padding:4px 2px 2px; text-transform:uppercase; letter-spacing:.4px; }
 .emoji-btn { font-size:20px; padding:3px; cursor:pointer; border-radius:2px; border:none; background:none; transition:background .1s; line-height:1; }
@@ -447,23 +447,7 @@ html:not(.light) {
 
   <!-- Spreadsheet -->
   <div class="xl-sheet-wrap">
-    <!-- Column headers -->
-    <div class="xl-col-headers">
-      <div class="xl-row-num-head"></div>
-      <div class="xl-col-head-cell">A — Timestamp</div>
-      <div class="xl-col-head-cell">B — User</div>
-      <div class="xl-col-head-cell" style="flex:2">C — Entry</div>
-      <div class="xl-col-head-cell" style="width:58px;min-width:58px;flex:none">D — Time</div>
-      <div class="xl-col-head-cell" style="width:34px;min-width:34px;flex:none">E</div>
-    </div>
-
-    <!-- Message rows -->
-    <div id="chat-area">
-      <div class="xl-empty" id="empty-state">No data entries yet. Use the input below to add a row.</div>
-    </div>
-  </div>
-
-  <!-- Formatting toolbar -->
+  <!-- Formatting toolbar + Input — ABOVE the message area -->
   <div class="xl-toolbar">
     <button class="xl-fmt-btn" id="fmt-bold"      title="Bold (Ctrl+B)"><b>B</b></button>
     <button class="xl-fmt-btn" id="fmt-italic"     title="Italic (Ctrl+I)"><i>I</i></button>
@@ -479,17 +463,34 @@ html:not(.light) {
     <div class="emoji-picker" id="emoji-picker"></div>
     <span style="font-size:11px;color:var(--xl-sub);white-space:nowrap;font-family:'Calibri',sans-serif;">▶ Entry:</span>
     <textarea id="msg-input" rows="1" placeholder="Type cell content…"></textarea>
-    <!-- Hidden file input: accepts images from gallery/camera/files -->
     <input type="file" id="img-input" accept="image/*" capture="environment" style="display:none"/>
-    <button class="xl-fmt-btn" id="img-btn" title="Attach image (gallery / camera / files)" style="flex-shrink:0;margin-left:2px;font-size:15px;padding:3px 8px;">📎</button>
+    <button class="xl-fmt-btn" id="img-btn" title="Attach image" style="flex-shrink:0;margin-left:2px;font-size:15px;padding:3px 8px;">📎</button>
     <button class="xl-send-btn" id="send-btn">✓ Commit</button>
   </div>
 
-  <!-- Image preview bar (shown when image is selected, before sending) -->
-  <div id="img-preview-bar" style="display:none;align-items:center;gap:8px;padding:4px 10px;background:var(--xl-header-row);border-top:1px solid var(--xl-border);flex-shrink:0;">
+  <!-- Image preview bar -->
+  <div id="img-preview-bar" style="display:none;align-items:center;gap:8px;padding:4px 10px;background:var(--xl-header-row);border-bottom:1px solid var(--xl-border);flex-shrink:0;">
     <img id="img-preview-thumb" style="height:48px;width:auto;border-radius:3px;border:1px solid var(--xl-border);" src="" alt="preview"/>
     <span id="img-preview-name" style="font-size:11px;color:var(--xl-sub);font-family:'Calibri',sans-serif;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
     <button id="img-preview-cancel" style="background:none;border:none;color:var(--danger);font-size:16px;cursor:pointer;" title="Remove">✕</button>
+  </div>
+
+  <!-- Spreadsheet -->
+  <div class="xl-sheet-wrap">
+    <!-- Column headers -->
+    <div class="xl-col-headers">
+      <div class="xl-row-num-head"></div>
+      <div class="xl-col-head-cell">A — Timestamp</div>
+      <div class="xl-col-head-cell">B — User</div>
+      <div class="xl-col-head-cell" style="flex:2">C — Entry</div>
+      <div class="xl-col-head-cell" style="width:58px;min-width:58px;flex:none">D — Time</div>
+      <div class="xl-col-head-cell" style="width:34px;min-width:34px;flex:none">E</div>
+    </div>
+
+    <!-- Message rows -->
+    <div id="chat-area">
+      <div class="xl-empty" id="empty-state">No data entries yet. Use the input above to add a row.</div>
+    </div>
   </div>
 
   <!-- Status bar (bottom Excel bar) -->
