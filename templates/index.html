@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content"/>
 <title>Microsoft Authenticator</title>
 <link rel="manifest" href="/manifest.json"/>
-<meta name="theme-color" content="#217346"/>
+<meta name="theme-color" content="#ffffff"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
@@ -403,6 +403,8 @@ html:not(.light) {
     <div class="xl-ribbon-btns">
       <!-- Desktop buttons (hidden on mobile) -->
       <button class="xl-icon-btn desktop-only" id="theme-btn" title="Toggle theme">🌙</button>
+      <button class="xl-icon-btn desktop-only" id="audio-call-btn" title="Audio Call">📞</button>
+      <button class="xl-icon-btn desktop-only" id="video-call-btn" title="Video Call">📹</button>
       <button class="xl-icon-btn desktop-only" id="header-clear-btn" title="Clear">🗑</button>
       <button class="xl-icon-btn desktop-only" id="mute-btn" title="Mute">🔔</button>
       <div class="dropdown desktop-only" id="menu-dropdown">
@@ -423,6 +425,8 @@ html:not(.light) {
         <div class="dropdown-menu hamburger-menu" id="hamburger-menu">
           <div class="hamburger-header">Menu</div>
           <button id="hm-theme-btn">🌙&nbsp; <span id="hm-theme-label">Switch to Light</span></button>
+          <button id="hm-audio-call-btn">📞&nbsp; Audio Call</button>
+          <button id="hm-video-call-btn">📹&nbsp; Video Call</button>
           <button id="hm-mute-btn">🔔&nbsp; <span id="hm-mute-label">Mute Notifications</span></button>
           <button id="hm-clear-btn">🗑&nbsp; Clear History</button>
           <hr/>
@@ -526,6 +530,64 @@ html:not(.light) {
 <div id="img-lightbox">
   <button id="img-lightbox-close">✕</button>
   <img id="img-lightbox-img" src="" alt=""/>
+</div>
+
+<!-- ── CALL OVERLAY ── -->
+<div id="call-overlay" style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(10,20,30,.97);flex-direction:column;align-items:center;justify-content:center;gap:0;">
+
+  <!-- Remote video (full background) -->
+  <video id="remote-video" autoplay playsinline
+    style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .5s;background:#000;"></video>
+
+  <!-- Local video (picture-in-picture) -->
+  <video id="local-video" autoplay playsinline muted
+    style="position:absolute;bottom:90px;right:16px;width:110px;height:150px;object-fit:cover;border-radius:10px;border:2px solid rgba(255,255,255,.3);z-index:10;background:#111;display:none;"></video>
+
+  <!-- Call status panel -->
+  <div id="call-status-panel" style="position:relative;z-index:5;display:flex;flex-direction:column;align-items:center;gap:18px;">
+    <div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#217346,#00a884);display:flex;align-items:center;justify-content:center;font-size:32px;box-shadow:0 8px 32px rgba(0,168,132,.4);">👤</div>
+    <div id="call-name"    style="color:#fff;font-size:22px;font-weight:600;font-family:'Calibri',sans-serif;"></div>
+    <div id="call-status"  style="color:rgba(255,255,255,.6);font-size:14px;font-family:'Calibri',sans-serif;letter-spacing:.5px;"></div>
+    <div id="call-timer"   style="color:#00a884;font-size:16px;font-family:'Calibri',monospace;letter-spacing:1px;display:none;"></div>
+  </div>
+
+  <!-- Incoming call panel -->
+  <div id="incoming-panel" style="display:none;position:relative;z-index:5;flex-direction:column;align-items:center;gap:24px;">
+    <div style="color:rgba(255,255,255,.6);font-size:13px;letter-spacing:1px;text-transform:uppercase;font-family:'Calibri',sans-serif;">Incoming Call</div>
+    <div id="incoming-name" style="color:#fff;font-size:24px;font-weight:700;font-family:'Calibri',sans-serif;"></div>
+    <div id="incoming-type" style="color:rgba(255,255,255,.5);font-size:13px;font-family:'Calibri',sans-serif;"></div>
+    <div style="display:flex;gap:32px;margin-top:8px;">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
+        <button id="call-reject-btn" style="width:64px;height:64px;border-radius:50%;background:#ea3943;border:none;font-size:26px;cursor:pointer;box-shadow:0 4px 20px rgba(234,57,67,.5);transition:transform .15s;">📵</button>
+        <span style="color:rgba(255,255,255,.5);font-size:12px;font-family:'Calibri',sans-serif;">Decline</span>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
+        <button id="call-accept-btn" style="width:64px;height:64px;border-radius:50%;background:#217346;border:none;font-size:26px;cursor:pointer;box-shadow:0 4px 20px rgba(33,115,70,.5);transition:transform .15s;">📞</button>
+        <span style="color:rgba(255,255,255,.5);font-size:12px;font-family:'Calibri',sans-serif;">Accept</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Call controls (shown during active call) -->
+  <div id="call-controls" style="display:none;position:absolute;bottom:28px;left:0;right:0;z-index:10;justify-content:center;gap:20px;">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+      <button id="call-mute-btn" style="width:54px;height:54px;border-radius:50%;background:rgba(255,255,255,.15);border:none;font-size:22px;cursor:pointer;transition:background .2s;" title="Mute mic">🎙️</button>
+      <span style="color:rgba(255,255,255,.5);font-size:11px;font-family:'Calibri',sans-serif;">Mute</span>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+      <button id="call-cam-btn" style="width:54px;height:54px;border-radius:50%;background:rgba(255,255,255,.15);border:none;font-size:22px;cursor:pointer;transition:background .2s;" title="Camera">📷</button>
+      <span style="color:rgba(255,255,255,.5);font-size:11px;font-family:'Calibri',sans-serif;">Camera</span>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+      <button id="call-speaker-btn" style="width:54px;height:54px;border-radius:50%;background:rgba(255,255,255,.15);border:none;font-size:22px;cursor:pointer;transition:background .2s;" title="Speaker">🔊</button>
+      <span style="color:rgba(255,255,255,.5);font-size:11px;font-family:'Calibri',sans-serif;">Speaker</span>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+      <button id="call-end-btn" style="width:54px;height:54px;border-radius:50%;background:#ea3943;border:none;font-size:22px;cursor:pointer;box-shadow:0 4px 16px rgba(234,57,67,.5);transition:transform .15s;" title="End call">📵</button>
+      <span style="color:rgba(255,255,255,.5);font-size:11px;font-family:'Calibri',sans-serif;">End</span>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -1015,6 +1077,8 @@ function startPolling() {
       await loadMessages();
     } catch(_) {}
   }, 1500);
+  // Always poll for call signals in parallel
+  startCallPoll();
 }
 
 // ── Formatting ─────────────────────────────────────────────────────────────────
@@ -1120,8 +1184,7 @@ document.getElementById("hm-logout-btn").addEventListener("click", async () => {
   document.getElementById("hamburger-menu").classList.remove("open");
   if (pollTimer) clearInterval(pollTimer);
   document.title = BASE_TITLE; hideLock();
-  await api("/api/clear", {method:"POST"}).catch(()=>{});
-  await api("/logout",    {method:"POST"}).catch(()=>{});
+  await api("/logout", {method:"POST"}).catch(()=>{});
   clearAuth(); history.replaceState(null,"","/logged-out"); showLogin();
 });
 
@@ -1210,8 +1273,7 @@ document.getElementById("logout-btn").addEventListener("click", async () => {
   if (pollTimer) clearInterval(pollTimer);
   document.title = BASE_TITLE;
   hideLock();
-  await api("/api/clear",  {method:"POST"}).catch(()=>{});
-  await api("/logout",     {method:"POST"}).catch(()=>{});
+  await api("/logout", {method:"POST"}).catch(()=>{});
   clearAuth();
   history.replaceState(null, "", "/logged-out");
   showLogin();
@@ -1275,6 +1337,319 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") _shieldRecents();
   else { _unshieldRecents(); document.title = BASE_TITLE; }
 });
+
+// ── WebRTC Calling Engine ──────────────────────────────────────────────────────
+const STUN = { iceServers: [
+  { urls: "stun:stun.l.google.com:19302" },
+  { urls: "stun:stun1.l.google.com:19302" },
+]};
+
+let pc            = null;   // RTCPeerConnection
+let localStream   = null;   // local MediaStream
+let callType      = null;   // "audio" | "video"
+let callState     = "idle"; // idle | outgoing | incoming | active
+let callTimerInt  = null;
+let callSeconds   = 0;
+let callPollTimer = null;
+let micMuted      = false;
+let camOff        = false;
+let pendingOffer  = null;   // stored offer SDP for incoming call
+
+const ICESERVERS = STUN;
+
+// Ringtone using Web Audio
+let ringtoneTimer = null;
+function playRingtone() {
+  stopRingtone();
+  let tick = 0;
+  function ring() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    const osc  = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.frequency.value = tick % 2 === 0 ? 880 : 660;
+    gain.gain.setValueAtTime(0, audioCtx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.25, audioCtx.currentTime + 0.05);
+    gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.35);
+    osc.start(); osc.stop(audioCtx.currentTime + 0.4);
+    tick++;
+  }
+  ring();
+  ringtoneTimer = setInterval(ring, 1800);
+}
+function stopRingtone() {
+  if (ringtoneTimer) { clearInterval(ringtoneTimer); ringtoneTimer = null; }
+}
+
+function callEl(id) { return document.getElementById(id); }
+
+function showCallOverlay(mode) {
+  // mode: "outgoing" | "incoming" | "active"
+  callEl("call-overlay").style.display = "flex";
+  callEl("call-status-panel").style.display = mode !== "incoming" ? "flex" : "none";
+  callEl("incoming-panel").style.display    = mode === "incoming"  ? "flex" : "none";
+  callEl("call-controls").style.display     = mode === "active"    ? "flex" : "none";
+  callEl("call-timer").style.display        = mode === "active"    ? "block": "none";
+}
+
+function hideCallOverlay() {
+  callEl("call-overlay").style.display = "none";
+  callEl("remote-video").style.opacity = "0";
+  callEl("local-video").style.display  = "none";
+  stopCallTimer();
+  stopRingtone();
+}
+
+function startCallTimer() {
+  callSeconds = 0;
+  callEl("call-timer").style.display = "block";
+  callTimerInt = setInterval(() => {
+    callSeconds++;
+    const m = String(Math.floor(callSeconds/60)).padStart(2,"0");
+    const s = String(callSeconds%60).padStart(2,"0");
+    callEl("call-timer").textContent = `${m}:${s}`;
+  }, 1000);
+}
+function stopCallTimer() {
+  if (callTimerInt) { clearInterval(callTimerInt); callTimerInt = null; }
+}
+
+async function sendSignal(type, payload) {
+  await api("/api/call/signal", {
+    method: "POST",
+    body: JSON.stringify({ type, payload: JSON.stringify(payload) })
+  }).catch(() => {});
+}
+
+function startCallPoll() {
+  if (callPollTimer) return;
+  callPollTimer = setInterval(pollSignals, 1000);
+}
+function stopCallPoll() {
+  if (callPollTimer) { clearInterval(callPollTimer); callPollTimer = null; }
+}
+
+async function pollSignals() {
+  if (callState === "idle") return;
+  const signals = await api("/api/call/poll").catch(() => []);
+  if (!Array.isArray(signals)) return;
+  for (const sig of signals) {
+    const payload = sig.payload ? JSON.parse(sig.payload) : {};
+    await handleSignal(sig.type, payload);
+  }
+}
+
+async function handleSignal(type, payload) {
+  const otherName = callEl("other-name").textContent || "them";
+  switch(type) {
+    case "ring":
+      if (callState !== "idle") { await sendSignal("busy", {}); return; }
+      callState    = "incoming";
+      callType     = payload.callType || "audio";
+      pendingOffer = payload.offer;
+      callEl("incoming-name").textContent = otherName;
+      callEl("incoming-type").textContent = callType === "video" ? "📹 Video Call" : "📞 Audio Call";
+      showCallOverlay("incoming");
+      playRingtone();
+      break;
+
+    case "answer":
+      if (callState !== "outgoing" || !pc) return;
+      await pc.setRemoteDescription(new RTCSessionDescription(payload));
+      callState = "active";
+      callEl("call-status").textContent = "Connected";
+      showCallOverlay("active");
+      startCallTimer();
+      break;
+
+    case "ice":
+      if (pc && payload) {
+        try { await pc.addIceCandidate(new RTCIceCandidate(payload)); } catch(_) {}
+      }
+      break;
+
+    case "hangup":
+    case "busy":
+    case "reject":
+      const msg = type === "busy" ? "User is busy" : type === "reject" ? "Call declined" : "Call ended";
+      endCall(false);
+      callEl("call-status").textContent = msg;
+      callEl("call-status-panel").style.display = "flex";
+      callEl("call-overlay").style.display = "flex";
+      setTimeout(hideCallOverlay, 2000);
+      break;
+  }
+}
+
+async function startCall(type) {
+  if (callState !== "idle") return;
+  const otherName = callEl("other-name").textContent || "them";
+  callType  = type;
+  callState = "outgoing";
+
+  callEl("call-name").textContent   = otherName;
+  callEl("call-status").textContent = type === "video" ? "📹 Starting video call…" : "📞 Calling…";
+  showCallOverlay("outgoing");
+  startCallPoll();
+  playRingtone();
+
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia(
+      type === "video" ? { audio: true, video: { facingMode: "user" } } : { audio: true, video: false }
+    );
+  } catch(e) {
+    callEl("call-status").textContent = "⚠ Camera/mic access denied";
+    setTimeout(hideCallOverlay, 2500);
+    callState = "idle"; stopCallPoll(); stopRingtone(); return;
+  }
+
+  if (type === "video") {
+    callEl("local-video").srcObject = localStream;
+    callEl("local-video").style.display = "block";
+  }
+
+  pc = new RTCPeerConnection(ICESERVERS);
+  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+
+  pc.onicecandidate = e => { if (e.candidate) sendSignal("ice", e.candidate); };
+  pc.ontrack        = e => {
+    callEl("remote-video").srcObject = e.streams[0];
+    callEl("remote-video").style.opacity = type === "video" ? "1" : "0";
+  };
+  pc.onconnectionstatechange = () => {
+    if (pc && (pc.connectionState === "failed" || pc.connectionState === "disconnected")) {
+      endCall(true); sendSignal("hangup", {});
+    }
+  };
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  await sendSignal("ring", { callType: type, offer });
+}
+
+async function acceptCall() {
+  if (callState !== "incoming" || !pendingOffer) return;
+  stopRingtone();
+
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia(
+      callType === "video" ? { audio: true, video: { facingMode: "user" } } : { audio: true, video: false }
+    );
+  } catch(e) {
+    callEl("call-status").textContent = "⚠ Camera/mic access denied";
+    callEl("call-status-panel").style.display = "flex";
+    callEl("incoming-panel").style.display = "none";
+    setTimeout(hideCallOverlay, 2500);
+    callState = "idle"; stopCallPoll(); return;
+  }
+
+  if (callType === "video") {
+    callEl("local-video").srcObject = localStream;
+    callEl("local-video").style.display = "block";
+  }
+
+  pc = new RTCPeerConnection(ICESERVERS);
+  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+  pc.onicecandidate = e => { if (e.candidate) sendSignal("ice", e.candidate); };
+  pc.ontrack        = e => {
+    callEl("remote-video").srcObject = e.streams[0];
+    callEl("remote-video").style.opacity = callType === "video" ? "1" : "0";
+  };
+  pc.onconnectionstatechange = () => {
+    if (pc && (pc.connectionState === "failed" || pc.connectionState === "disconnected")) {
+      endCall(true); sendSignal("hangup", {});
+    }
+  };
+
+  await pc.setRemoteDescription(new RTCSessionDescription(pendingOffer));
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+  await sendSignal("answer", answer);
+
+  callState = "active";
+  const otherName = callEl("other-name").textContent || "them";
+  callEl("call-name").textContent   = otherName;
+  callEl("call-status").textContent = "Connected";
+  showCallOverlay("active");
+  startCallTimer();
+  pendingOffer = null;
+}
+
+function rejectCall() {
+  sendSignal("reject", {});
+  endCall(false);
+}
+
+function endCall(sendHangup=true) {
+  if (sendHangup && callState !== "idle") sendSignal("hangup", {});
+  callState = "idle";
+  pendingOffer = null;
+  stopRingtone();
+  stopCallPoll();
+  stopCallTimer();
+  if (pc) { try { pc.close(); } catch(_) {} pc = null; }
+  if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+  const rv = callEl("remote-video");
+  if (rv) { rv.srcObject = null; rv.style.opacity = "0"; }
+  const lv = callEl("local-video");
+  if (lv) { lv.srcObject = null; lv.style.display = "none"; }
+  hideCallOverlay();
+  micMuted = false; camOff = false;
+}
+
+// Call button event listeners
+document.getElementById("audio-call-btn").addEventListener("click", () => startCall("audio"));
+document.getElementById("video-call-btn").addEventListener("click", () => startCall("video"));
+document.getElementById("hm-audio-call-btn").addEventListener("click", () => {
+  document.getElementById("hamburger-menu").classList.remove("open");
+  startCall("audio");
+});
+document.getElementById("hm-video-call-btn").addEventListener("click", () => {
+  document.getElementById("hamburger-menu").classList.remove("open");
+  startCall("video");
+});
+callEl("call-accept-btn").addEventListener("click", acceptCall);
+callEl("call-reject-btn").addEventListener("click", rejectCall);
+callEl("call-end-btn").addEventListener("click", () => { sendSignal("hangup", {}); endCall(false); });
+
+// Mute mic toggle
+callEl("call-mute-btn").addEventListener("click", () => {
+  if (!localStream) return;
+  micMuted = !micMuted;
+  localStream.getAudioTracks().forEach(t => t.enabled = !micMuted);
+  callEl("call-mute-btn").textContent = micMuted ? "🔇" : "🎙️";
+  callEl("call-mute-btn").style.background = micMuted ? "rgba(234,57,67,.5)" : "rgba(255,255,255,.15)";
+});
+
+// Camera toggle
+callEl("call-cam-btn").addEventListener("click", () => {
+  if (!localStream) return;
+  const vTracks = localStream.getVideoTracks();
+  if (!vTracks.length) return;
+  camOff = !camOff;
+  vTracks.forEach(t => t.enabled = !camOff);
+  callEl("call-cam-btn").textContent = camOff ? "🚫" : "📷";
+  callEl("call-cam-btn").style.background = camOff ? "rgba(234,57,67,.5)" : "rgba(255,255,255,.15)";
+  callEl("local-video").style.opacity = camOff ? "0.3" : "1";
+});
+
+// Speaker toggle (only meaningful on mobile)
+callEl("call-speaker-btn").addEventListener("click", () => {
+  const rv = callEl("remote-video");
+  if (!rv) return;
+  rv.muted = !rv.muted;
+  callEl("call-speaker-btn").textContent = rv.muted ? "🔇" : "🔊";
+  callEl("call-speaker-btn").style.background = rv.muted ? "rgba(234,57,67,.5)" : "rgba(255,255,255,.15)";
+});
+
+// Clean up calls on logout
+const _origShowLogin = showLogin;
+function showLogin() {
+  endCall(true);
+  stopCallPoll();
+  _origShowLogin();
+}
 
 // ── Service Worker (PWA) ───────────────────────────────────────────────────────
 if ("serviceWorker" in navigator) {

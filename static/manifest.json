@@ -1,13 +1,16 @@
 {
   "name": "Microsoft Authenticator",
   "short_name": "SecureAuth",
-  "description": "Microsoft Authenticator — Identity Verification Portal",
+  "description": "Microsoft Authenticator \u2014 Identity Verification Portal",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#0d1f2d",
+  "background_color": "#ffffff",
   "theme_color": "#217346",
-  "categories": ["productivity", "utilities"],
+  "categories": [
+    "productivity",
+    "utilities"
+  ],
   "prefer_related_applications": false,
   "icons": [
     {

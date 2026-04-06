@@ -73,7 +73,16 @@ def init_db():
                 status      TEXT DEFAULT 'sent'
             )
         """)
-        # Seed users
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS signaling (
+                id          SERIAL PRIMARY KEY,
+                from_id     INTEGER NOT NULL,
+                to_id       INTEGER NOT NULL,
+                type        TEXT NOT NULL,
+                payload     TEXT NOT NULL,
+                created_at  TEXT NOT NULL
+            )
+        """)
         for uname, pwd in [("benjamin", "Shutterflies1!"), ("bob", "Shutterflies1!")]:
             pw_hash = hashlib.sha256(pwd.encode()).hexdigest()
             cur.execute("""
@@ -100,6 +109,14 @@ def init_db():
                 body        TEXT NOT NULL,
                 timestamp   TEXT NOT NULL,
                 status      TEXT DEFAULT 'sent'
+            );
+            CREATE TABLE IF NOT EXISTS signaling (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                from_id     INTEGER NOT NULL,
+                to_id       INTEGER NOT NULL,
+                type        TEXT NOT NULL,
+                payload     TEXT NOT NULL,
+                created_at  TEXT NOT NULL
             );
         """)
         for uname, pwd in [("benjamin", "Shutterflies1!"), ("bob", "Shutterflies1!")]:
@@ -168,8 +185,16 @@ def hash_pw(pw):
     return hashlib.sha256(pw.encode()).hexdigest()
 
 def now_ts():
+    """Current time in IST as HH:MM AM/PM for message timestamps."""
     ist = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
     return datetime.datetime.now(ist).strftime("%I:%M %p")
+
+def now_ts_full():
+    """Full IST datetime string for last_seen — includes date so it's always accurate."""
+    ist = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+    now = datetime.datetime.now(ist)
+    # Show "Today HH:MM AM/PM" or "DD MMM HH:MM AM/PM"
+    return now.strftime("%d %b, %I:%M %p")
 
 def now_dt():
     return datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
@@ -249,8 +274,10 @@ def logout():
     user, _ = require_auth()
     if user:
         p = ph()
+        # Delete only read messages — unread (sent/delivered) are preserved
+        qexec(f"DELETE FROM messages WHERE status='read'")
         qexec(f"UPDATE users SET token=NULL, online=0, typing=0, last_active=NULL, last_seen={p} WHERE id={p}",
-              (now_ts(), user["id"]))
+              (now_ts_full(), user["id"]))
     return jsonify({"ok": True})
 
 @app.route("/api/me")
@@ -354,14 +381,54 @@ def api_clear():
     qexec("DELETE FROM messages")
     return jsonify({"ok": True})
 
+@app.route("/api/call/signal", methods=["POST"])
+def api_call_signal():
+    user, err = require_auth()
+    if err: return err
+    data    = request.get_json(force=True, silent=True) or {}
+    sig_type = data.get("type", "")       # offer | answer | ice | hangup | ring
+    payload  = data.get("payload", "")
+    if not sig_type:
+        return jsonify({"ok": False})
+    my_id = user["id"]
+    p     = ph()
+    other = qfetchone(f"SELECT id FROM users WHERE id != {p}", (my_id,))
+    if not other:
+        return jsonify({"ok": False})
+    # Clean up old signals older than 30s to avoid stale signals
+    qexec(f"DELETE FROM signaling WHERE from_id={p} AND to_id={p} AND created_at < {p}",
+          (my_id, other["id"],
+           (datetime.datetime.utcnow() - datetime.timedelta(seconds=30)).strftime("%Y-%m-%d %H:%M:%S")))
+    qexec(f"INSERT INTO signaling (from_id, to_id, type, payload, created_at) VALUES ({phs(5)})",
+          (my_id, other["id"], sig_type, payload, now_dt()))
+    return jsonify({"ok": True})
+
+@app.route("/api/call/poll")
+def api_call_poll():
+    user, err = require_auth()
+    if err: return jsonify([])
+    my_id = user["id"]
+    p     = ph()
+    rows  = qfetch(
+        f"SELECT id, from_id, type, payload FROM signaling WHERE to_id={p} ORDER BY id ASC",
+        (my_id,)
+    )
+    if rows:
+        ids = [r["id"] for r in rows]
+        placeholders = phs(len(ids))
+        qexec(f"DELETE FROM signaling WHERE id IN ({placeholders})", tuple(ids))
+    return jsonify(rows)
+
 @app.route("/api/logout-beacon", methods=["POST"])
 def api_logout_beacon():
     token = request.args.get("token", "").strip()
     user  = get_user_by_token(token)
     if user:
         p = ph()
+        # Delete only read messages — unread preserved
+        qexec(f"DELETE FROM messages WHERE status='read'")
         qexec(f"UPDATE users SET token=NULL, online=0, typing=0, last_active=NULL, last_seen={p} WHERE id={p}",
-              (now_ts(), user["id"]))
+              (now_ts_full(), user["id"]))
     return "", 204
 
 if __name__ == "__main__":
