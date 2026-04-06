@@ -1071,7 +1071,7 @@ function startPolling() {
   pollTimer = setInterval(async () => {
     try {
       const d = await api("/api/poll");
-      if (!d.logged_in) { showLogin(); return; }
+      if (!d.logged_in) { clearAuth(); showLogin(); return; }
       updateStatus(d.other_online, d.other_last_seen);
       d.other_typing ? showTyping(document.getElementById("other-name").textContent||"them") : hideTyping();
       await loadMessages();
@@ -1183,9 +1183,12 @@ document.getElementById("hm-clear-btn") .addEventListener("click", () => { docum
 document.getElementById("hm-logout-btn").addEventListener("click", async () => {
   document.getElementById("hamburger-menu").classList.remove("open");
   if (pollTimer) clearInterval(pollTimer);
+  stopCallPoll();
+  endCall(false);
   document.title = BASE_TITLE; hideLock();
-  await api("/logout", {method:"POST"}).catch(()=>{});
-  clearAuth(); history.replaceState(null,"","/logged-out"); showLogin();
+  await api("/logout", {method:"POST"}).catch(()=>{});  // must be before clearAuth
+  clearAuth();
+  history.replaceState(null,"","/logged-out"); showLogin();
 });
 
 document.addEventListener("click", () => {
@@ -1262,18 +1265,21 @@ window.addEventListener("popstate", async (e) => {
   }
   // User pressed back while logged in — logout
   if (pollTimer) clearInterval(pollTimer);
+  stopCallPoll(); endCall(false);
   document.title = BASE_TITLE;
   hideLock();
-  await api("/logout", {method:"POST"}).catch(()=>{});
+  await api("/logout", {method:"POST"}).catch(()=>{});  // before clearAuth
   clearAuth();
   history.replaceState(null, "", "/logged-out");
   showLogin();
 });
 document.getElementById("logout-btn").addEventListener("click", async () => {
   if (pollTimer) clearInterval(pollTimer);
+  stopCallPoll();
+  endCall(false);
   document.title = BASE_TITLE;
   hideLock();
-  await api("/logout", {method:"POST"}).catch(()=>{});
+  await api("/logout", {method:"POST"}).catch(()=>{});  // must be before clearAuth
   clearAuth();
   history.replaceState(null, "", "/logged-out");
   showLogin();
@@ -1431,7 +1437,7 @@ function stopCallPoll() {
 }
 
 async function pollSignals() {
-  if (callState === "idle") return;
+  // Always poll — must detect incoming calls even when idle
   const signals = await api("/api/call/poll").catch(() => []);
   if (!Array.isArray(signals)) return;
   for (const sig of signals) {
@@ -1643,13 +1649,7 @@ callEl("call-speaker-btn").addEventListener("click", () => {
   callEl("call-speaker-btn").style.background = rv.muted ? "rgba(234,57,67,.5)" : "rgba(255,255,255,.15)";
 });
 
-// Clean up calls on logout
-const _origShowLogin = showLogin;
-function showLogin() {
-  endCall(true);
-  stopCallPoll();
-  _origShowLogin();
-}
+// Call cleanup on logout handled directly in each logout handler above
 
 // ── Service Worker (PWA) ───────────────────────────────────────────────────────
 if ("serviceWorker" in navigator) {
