@@ -602,6 +602,10 @@ html:not(.light) {
       <span style="color:rgba(255,255,255,.5);font-size:11px;font-family:'Calibri',sans-serif;">Camera</span>
     </div>
     <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+      <button id="call-minimise-btn" style="width:54px;height:54px;border-radius:50%;background:rgba(255,255,255,.15);border:none;font-size:22px;cursor:pointer;transition:background .2s;" title="Minimise">⬇️</button>
+      <span style="color:rgba(255,255,255,.5);font-size:11px;font-family:'Calibri',sans-serif;">Minimise</span>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
       <button id="call-speaker-btn" style="width:54px;height:54px;border-radius:50%;background:rgba(255,255,255,.15);border:none;font-size:22px;cursor:pointer;transition:background .2s;" title="Speaker">🔊</button>
       <span style="color:rgba(255,255,255,.5);font-size:11px;font-family:'Calibri',sans-serif;">Speaker</span>
     </div>
@@ -611,6 +615,17 @@ html:not(.light) {
     </div>
   </div>
 
+</div>
+
+<!-- Mini call bar — shown when call is minimised so user can chat -->
+<div id="mini-call-bar" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:1500;background:linear-gradient(90deg,#1a3a2a,#217346);padding:8px 16px;align-items:center;gap:12px;box-shadow:0 -2px 12px rgba(0,0,0,.3);">
+  <span style="font-size:18px;" id="mini-call-icon">📞</span>
+  <div style="flex:1;">
+    <div style="color:#fff;font-size:13px;font-weight:600;font-family:'Calibri',sans-serif;" id="mini-call-name"></div>
+    <div style="color:rgba(255,255,255,.7);font-size:11px;font-family:'Calibri',monospace;" id="mini-call-timer-bar">0:00</div>
+  </div>
+  <button id="mini-call-maximise" style="background:rgba(255,255,255,.15);border:none;color:#fff;font-size:13px;padding:6px 14px;border-radius:20px;cursor:pointer;font-family:'Calibri',sans-serif;">⬆️ Return</button>
+  <button id="mini-call-end" style="background:#ea3943;border:none;color:#fff;font-size:13px;padding:6px 14px;border-radius:20px;cursor:pointer;font-family:'Calibri',sans-serif;">📵 End</button>
 </div>
 
 <script>
@@ -1386,29 +1401,79 @@ let pendingOffer  = null;   // stored offer SDP for incoming call
 
 const ICESERVERS = STUN;
 
-// Ringtone using Web Audio
-let ringtoneTimer = null;
+// ── Minimise / Maximise call ───────────────────────────────────────────────────
+let callMinimised = false;
+
+function minimiseCall() {
+  callMinimised = true;
+  callEl("call-overlay").style.display = "none";
+  const bar = document.getElementById("mini-call-bar");
+  bar.style.display = "flex";
+  document.getElementById("mini-call-name").textContent = callEl("call-name").textContent;
+  document.getElementById("mini-call-icon").textContent = callType === "video" ? "📹" : "📞";
+}
+
+function maximiseCall() {
+  callMinimised = false;
+  document.getElementById("mini-call-bar").style.display = "none";
+  callEl("call-overlay").style.display = "flex";
+  showCallOverlay("active");
+}
+
+callEl("call-minimise-btn").addEventListener("click", minimiseCall);
+document.getElementById("mini-call-maximise").addEventListener("click", maximiseCall);
+document.getElementById("mini-call-end").addEventListener("click", () => {
+  sendSignal("hangup", {});
+  const dur = callStartEpoch ? Math.round((Date.now()-callStartEpoch)/1000) : 0;
+  logCall("completed", dur);
+  endCall(false);
+  document.getElementById("mini-call-bar").style.display = "none";
+});
+
+// Update mini bar timer in sync with main timer
+const _origStartCallTimer = startCallTimer;
+function startCallTimer() {
+  callSeconds = 0;
+  callEl("call-timer").style.display = "block";
+  callTimerInt = setInterval(() => {
+    callSeconds++;
+    const m = String(Math.floor(callSeconds/60)).padStart(2,"0");
+    const s = String(callSeconds%60).padStart(2,"0");
+    const timeStr = `${m}:${s}`;
+    callEl("call-timer").textContent = timeStr;
+    // Also update mini bar
+    const miniTimer = document.getElementById("mini-call-timer-bar");
+    if (miniTimer) miniTimer.textContent = timeStr;
+  }, 1000);
+}
+
+// ── Incoming call notification (plays for both audio and video) ────────────────
 function playRingtone() {
   stopRingtone();
+  // Initialise audio context if needed
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(_) { return; }
+  }
+  if (audioCtx.state === "suspended") audioCtx.resume();
+
   let tick = 0;
   function ring() {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === "suspended") audioCtx.resume();
-    const osc  = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.connect(gain); gain.connect(audioCtx.destination);
-    osc.frequency.value = tick % 2 === 0 ? 880 : 660;
-    gain.gain.setValueAtTime(0, audioCtx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.25, audioCtx.currentTime + 0.05);
-    gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.35);
-    osc.start(); osc.stop(audioCtx.currentTime + 0.4);
-    tick++;
+    try {
+      const osc  = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      // Alternating tones: 880Hz / 660Hz pattern
+      osc.frequency.value = tick % 2 === 0 ? 880 : 660;
+      gain.gain.setValueAtTime(0, audioCtx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + 0.05);
+      gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.38);
+      osc.start(audioCtx.currentTime);
+      osc.stop(audioCtx.currentTime + 0.4);
+      tick++;
+    } catch(_) {}
   }
   ring();
-  ringtoneTimer = setInterval(ring, 1800);
-}
-function stopRingtone() {
-  if (ringtoneTimer) { clearInterval(ringtoneTimer); ringtoneTimer = null; }
+  ringtoneTimer = setInterval(ring, 1600);
 }
 
 function callEl(id) { return document.getElementById(id); }
@@ -1435,20 +1500,12 @@ function hideCallOverlay() {
   callEl("call-overlay").style.display = "none";
   callEl("remote-video").style.opacity = "0";
   callEl("local-video").style.display  = "none";
+  document.getElementById("mini-call-bar").style.display = "none";
+  callMinimised = false;
   stopCallTimer();
   stopRingtone();
 }
 
-function startCallTimer() {
-  callSeconds = 0;
-  callEl("call-timer").style.display = "block";
-  callTimerInt = setInterval(() => {
-    callSeconds++;
-    const m = String(Math.floor(callSeconds/60)).padStart(2,"0");
-    const s = String(callSeconds%60).padStart(2,"0");
-    callEl("call-timer").textContent = `${m}:${s}`;
-  }, 1000);
-}
 function stopCallTimer() {
   if (callTimerInt) { clearInterval(callTimerInt); callTimerInt = null; }
 }
@@ -1496,9 +1553,10 @@ async function handleSignal(type, payload) {
 
     case "answer":
       if (callState !== "outgoing" || !pc) return;
+      stopRingtone();  // stop ringing when other side answers
       await pc.setRemoteDescription(new RTCSessionDescription(payload));
       callState = "active";
-      callStartEpoch = Date.now();  // reset epoch to when actually connected
+      callStartEpoch = Date.now();
       callEl("call-status").textContent = "Connected";
       showCallOverlay("active");
       startCallTimer();
@@ -1563,14 +1621,25 @@ async function startCall(type) {
   pc = new RTCPeerConnection(ICESERVERS);
   localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
 
-  pc.onicecandidate = e => { if (e.candidate) sendSignal("ice", e.candidate); };
-  pc.ontrack        = e => {
-    callEl("remote-video").srcObject = e.streams[0];
-    callEl("remote-video").style.opacity = type === "video" ? "1" : "0";
+  pc.ontrack = e => {
+    const rv = callEl("remote-video");
+    if (e.streams && e.streams[0]) {
+      rv.srcObject = e.streams[0];
+    } else {
+      if (!rv.srcObject) rv.srcObject = new MediaStream();
+      rv.srcObject.addTrack(e.track);
+    }
+    if (type === "video") {
+      rv.style.opacity = "1";
+      rv.play().catch(()=>{});
+    }
   };
+  pc.onicecandidate = e => { if (e.candidate) sendSignal("ice", e.candidate); };
   pc.onconnectionstatechange = () => {
     if (pc && (pc.connectionState === "failed" || pc.connectionState === "disconnected")) {
-      endCall(true); sendSignal("hangup", {});
+      const dur = callStartEpoch ? Math.round((Date.now()-callStartEpoch)/1000) : 0;
+      logCall("completed", dur);
+      endCall(false);
     }
   };
 
@@ -1582,10 +1651,13 @@ async function startCall(type) {
 async function acceptCall() {
   if (callState !== "incoming" || !pendingOffer) return;
   stopRingtone();
+  const otherName = callEl("other-name").textContent || "them";
 
   try {
     localStream = await navigator.mediaDevices.getUserMedia(
-      callType === "video" ? { audio: true, video: { facingMode: "user" } } : { audio: true, video: false }
+      callType === "video"
+        ? { audio: true, video: { facingMode: "user", width: {ideal:640}, height: {ideal:480} } }
+        : { audio: true, video: false }
     );
   } catch(e) {
     callEl("call-status").textContent = "⚠ Camera/mic access denied";
@@ -1595,21 +1667,39 @@ async function acceptCall() {
     callState = "idle"; stopCallPoll(); return;
   }
 
+  pc = new RTCPeerConnection(ICESERVERS);
+
+  // Add tracks BEFORE setRemoteDescription
+  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+
+  // Show local video immediately
   if (callType === "video") {
     callEl("local-video").srcObject = localStream;
     callEl("local-video").style.display = "block";
   }
 
-  pc = new RTCPeerConnection(ICESERVERS);
-  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-  pc.onicecandidate = e => { if (e.candidate) sendSignal("ice", e.candidate); };
-  pc.ontrack        = e => {
-    callEl("remote-video").srcObject = e.streams[0];
-    callEl("remote-video").style.opacity = callType === "video" ? "1" : "0";
+  // ontrack must be set before setRemoteDescription
+  pc.ontrack = e => {
+    const rv = callEl("remote-video");
+    if (e.streams && e.streams[0]) {
+      rv.srcObject = e.streams[0];
+    } else {
+      // Fallback: build stream from track directly
+      if (!rv.srcObject) rv.srcObject = new MediaStream();
+      rv.srcObject.addTrack(e.track);
+    }
+    if (callType === "video") {
+      rv.style.opacity = "1";
+      rv.play().catch(()=>{});
+    }
   };
+
+  pc.onicecandidate = e => { if (e.candidate) sendSignal("ice", e.candidate); };
   pc.onconnectionstatechange = () => {
     if (pc && (pc.connectionState === "failed" || pc.connectionState === "disconnected")) {
-      endCall(true); sendSignal("hangup", {});
+      const dur = callStartEpoch ? Math.round((Date.now()-callStartEpoch)/1000) : 0;
+      logCall("completed", dur);
+      endCall(false);
     }
   };
 
@@ -1620,7 +1710,7 @@ async function acceptCall() {
 
   callState = "active";
   callStartedAt  = callStartedAt || new Date().toLocaleString("en-IN", {timeZone:"Asia/Kolkata"});
-  callStartEpoch = callStartEpoch || Date.now();
+  callStartEpoch = Date.now();
   callEl("call-name").textContent   = otherName;
   callEl("call-status").textContent = "Connected";
   showCallOverlay("active");
