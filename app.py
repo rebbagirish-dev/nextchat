@@ -74,6 +74,17 @@ def init_db():
             )
         """)
         cur.execute("""
+            CREATE TABLE IF NOT EXISTS call_history (
+                id          SERIAL PRIMARY KEY,
+                caller_id   INTEGER NOT NULL,
+                callee_id   INTEGER NOT NULL,
+                call_type   TEXT NOT NULL,
+                status      TEXT NOT NULL,
+                started_at  TEXT NOT NULL,
+                duration    INTEGER DEFAULT 0
+            )
+        """)
+        cur.execute("""
             CREATE TABLE IF NOT EXISTS signaling (
                 id          SERIAL PRIMARY KEY,
                 from_id     INTEGER NOT NULL,
@@ -109,6 +120,15 @@ def init_db():
                 body        TEXT NOT NULL,
                 timestamp   TEXT NOT NULL,
                 status      TEXT DEFAULT 'sent'
+            );
+            CREATE TABLE IF NOT EXISTS call_history (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                caller_id   INTEGER NOT NULL,
+                callee_id   INTEGER NOT NULL,
+                call_type   TEXT NOT NULL,
+                status      TEXT NOT NULL,
+                started_at  TEXT NOT NULL,
+                duration    INTEGER DEFAULT 0
             );
             CREATE TABLE IF NOT EXISTS signaling (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -379,6 +399,49 @@ def api_clear():
     user, err = require_auth()
     if err: return err
     qexec("DELETE FROM messages")
+    return jsonify({"ok": True})
+
+@app.route("/api/call/history/log", methods=["POST"])
+def api_call_history_log():
+    user, err = require_auth()
+    if err: return err
+    data      = request.get_json(force=True, silent=True) or {}
+    call_type = data.get("call_type", "audio")
+    status    = data.get("status", "missed")   # completed | missed | cancelled | rejected
+    duration  = int(data.get("duration", 0))
+    started   = data.get("started_at", now_ts_full())
+    my_id     = user["id"]
+    p         = ph()
+    other     = qfetchone(f"SELECT id FROM users WHERE id != {p}", (my_id,))
+    if not other:
+        return jsonify({"ok": False})
+    qexec(
+        f"INSERT INTO call_history (caller_id,callee_id,call_type,status,started_at,duration) VALUES ({phs(6)})",
+        (my_id, other["id"], call_type, status, started, duration)
+    )
+    return jsonify({"ok": True})
+
+@app.route("/api/call/history")
+def api_call_history():
+    user, err = require_auth()
+    if err: return err
+    my_id = user["id"]
+    p     = ph()
+    rows  = qfetch(f"""
+        SELECT h.id, h.caller_id, h.call_type, h.status, h.started_at, h.duration,
+               u.username as other_username
+        FROM call_history h
+        JOIN users u ON (CASE WHEN h.caller_id={p} THEN h.callee_id ELSE h.caller_id END) = u.id
+        WHERE h.caller_id={p} OR h.callee_id={p}
+        ORDER BY h.id DESC LIMIT 50
+    """, (my_id, my_id, my_id))
+    return jsonify(rows)
+
+@app.route("/api/call/history/clear", methods=["POST"])
+def api_call_history_clear():
+    user, err = require_auth()
+    if err: return err
+    qexec("DELETE FROM call_history")
     return jsonify({"ok": True})
 
 @app.route("/api/call/signal", methods=["POST"])
