@@ -1776,9 +1776,6 @@ callEl("call-speaker-btn").addEventListener("click", () => {
 });
 
 // ── Call logging ───────────────────────────────────────────────────────────────
-let callStartedAt  = null;  // IST string when call started
-let callStartEpoch = 0;     // epoch ms for duration calc
-
 function logCall(status, durationSecs) {
   api("/api/call/history/log", {
     method: "POST",
