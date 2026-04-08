@@ -1383,10 +1383,18 @@ document.addEventListener("visibilitychange", () => {
 });
 
 // ── WebRTC Calling Engine (clean rewrite) ────────────────────────────────────
+// Free public TURN servers (metered.ca provides free tier)
+// These relay traffic when direct P2P fails (NAT/firewall)
 const ICE_SERVERS = { iceServers: [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
-  { urls: "stun:stun2.l.google.com:19302" },
+  // Free TURN servers from open-relay
+  { urls: "turn:openrelay.metered.ca:80",
+    username: "openrelayproject", credential: "openrelayproject" },
+  { urls: "turn:openrelay.metered.ca:443",
+    username: "openrelayproject", credential: "openrelayproject" },
+  { urls: "turn:openrelay.metered.ca:443?transport=tcp",
+    username: "openrelayproject", credential: "openrelayproject" },
 ]};
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -1521,31 +1529,50 @@ function maximiseCall() {
 
 // ── Peer connection setup ─────────────────────────────────────────────────────
 function createPC(vType) {
-  if (pc) { try { pc.close(); } catch(e) {} }
+  if (pc) { try { pc.close(); } catch(e) {} pc = null; }
   pc = new RTCPeerConnection(ICE_SERVERS);
 
-  pc.onicecandidate = e => {
-    if (e.candidate) sendSignal("ice", e.candidate.toJSON());
-  };
+  // Collect remote tracks into a stable MediaStream
+  const remoteStream = new MediaStream();
+  const rv = callEl("remote-video");
+  rv.srcObject = remoteStream;
 
   pc.ontrack = e => {
-    const rv = callEl("remote-video");
-    // Build a stream from the incoming tracks
-    if (!rv.srcObject) rv.srcObject = new MediaStream();
-    rv.srcObject.addTrack(e.track);
-    if (vType === "video") {
-      rv.style.opacity = "1";
-    }
+    // Add each track to the remote stream
+    remoteStream.addTrack(e.track);
+    e.track.onunmute = () => {
+      if (vType === "video" && e.track.kind === "video") rv.style.opacity = "1";
+      rv.play().catch(() => {});
+    };
+    // Also try playing immediately
+    if (vType === "video" && e.track.kind === "video") rv.style.opacity = "1";
     rv.play().catch(() => {});
+  };
+
+  pc.onicecandidate = e => {
+    if (e.candidate) {
+      sendSignal("ice", e.candidate.toJSON());
+    }
+  };
+
+  pc.oniceconnectionstatechange = () => {
+    const state = pc ? pc.iceConnectionState : "";
+    // Update call status with connection progress
+    const statusEl = callEl("call-status");
+    if (state === "checking")     { if(statusEl) statusEl.textContent = "Connecting…"; }
+    if (state === "connected" || state === "completed") {
+      if(statusEl) statusEl.textContent = "Connected";
+      rv.play().catch(() => {});
+    }
+    if (state === "failed") {
+      if(statusEl) statusEl.textContent = "⚠ Connection failed";
+      setTimeout(() => endCall(true), 2000);
+    }
   };
 
   pc.onconnectionstatechange = () => {
     if (!pc) return;
-    if (pc.connectionState === "connected") {
-      // Double-check remote video is playing
-      const rv = callEl("remote-video");
-      if (rv.srcObject && rv.paused) rv.play().catch(() => {});
-    }
+    if (pc.connectionState === "connected") rv.play().catch(() => {});
     if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
       const dur = callStartEpoch ? Math.round((Date.now() - callStartEpoch) / 1000) : 0;
       logCall("completed", dur);
@@ -1554,6 +1581,18 @@ function createPC(vType) {
   };
 
   return pc;
+}
+
+// Wait for ICE gathering to complete before sending SDP
+function waitForICE(peerConn) {
+  return new Promise(resolve => {
+    if (peerConn.iceGatheringState === "complete") { resolve(); return; }
+    peerConn.onicegatheringstatechange = () => {
+      if (peerConn.iceGatheringState === "complete") resolve();
+    };
+    // Timeout after 3s — send whatever we have
+    setTimeout(resolve, 3000);
+  });
 }
 
 // ── Make a call ───────────────────────────────────────────────────────────────
@@ -1592,8 +1631,13 @@ async function startCall(type) {
   createPC(type);
   localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
 
-  const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: type === "video" });
+  const offer = await pc.createOffer({
+    offerToReceiveAudio: true,
+    offerToReceiveVideo: type === "video"
+  });
   await pc.setLocalDescription(offer);
+  // Wait for ICE gathering so offer contains all candidates
+  await waitForICE(pc);
   await sendSignal("ring", { callType: type, offer: pc.localDescription.toJSON() });
 }
 
@@ -1630,6 +1674,8 @@ async function acceptCall() {
   await pc.setRemoteDescription(new RTCSessionDescription(pendingOffer));
   const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
+  // Wait for ICE gathering so answer contains all candidates
+  await waitForICE(pc);
   await sendSignal("answer", pc.localDescription.toJSON());
 
   pendingOffer   = null;
@@ -1660,9 +1706,9 @@ function endCall(sendHangup = true) {
   if (pc)          { try { pc.close(); } catch(e) {} pc = null; }
   if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
   const rv = callEl("remote-video");
-  if (rv) { rv.srcObject = null; rv.style.opacity = "0"; }
+  if (rv) { rv.srcObject = null; rv.style.opacity = "0"; rv.load(); }
   const lv = callEl("local-video");
-  if (lv) { lv.srcObject = null; lv.style.display = "none"; }
+  if (lv) { lv.srcObject = null; lv.style.display = "none"; lv.load(); }
   micMuted = false; camOff = false;
   callStartEpoch = 0; callStartedAt = null;
   hideCallOverlay();
