@@ -1382,133 +1382,31 @@ document.addEventListener("visibilitychange", () => {
   else { _unshieldRecents(); document.title = BASE_TITLE; }
 });
 
-// ── WebRTC Calling Engine ──────────────────────────────────────────────────────
-const STUN = { iceServers: [
+// ── WebRTC Calling Engine (clean rewrite) ────────────────────────────────────
+const ICE_SERVERS = { iceServers: [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
+  { urls: "stun:stun2.l.google.com:19302" },
 ]};
 
-let pc            = null;   // RTCPeerConnection
-let localStream   = null;   // local MediaStream
-let callType      = null;   // "audio" | "video"
-let callState     = "idle"; // idle | outgoing | incoming | active
-let callTimerInt  = null;
-let callSeconds   = 0;
-let callPollTimer = null;
+// ── State ─────────────────────────────────────────────────────────────────────
+let pc            = null;
+let localStream   = null;
+let callType      = null;          // "audio" | "video"
+let callState     = "idle";        // idle | outgoing | incoming | active
+let callMinimised = false;
 let micMuted      = false;
 let camOff        = false;
-let pendingOffer  = null;   // stored offer SDP for incoming call
+let pendingOffer  = null;
+let callPollTimer = null;
+let callSeconds   = 0;
+let callTimerInt  = null;
+let callStartEpoch = 0;
+let callStartedAt  = null;
+let ringtoneTimer  = null;
 
-const ICESERVERS = STUN;
-
-// ── Minimise / Maximise call ───────────────────────────────────────────────────
-let callMinimised = false;
-
-function minimiseCall() {
-  callMinimised = true;
-  callEl("call-overlay").style.display = "none";
-  const bar = document.getElementById("mini-call-bar");
-  bar.style.display = "flex";
-  document.getElementById("mini-call-name").textContent = callEl("call-name").textContent;
-  document.getElementById("mini-call-icon").textContent = callType === "video" ? "📹" : "📞";
-}
-
-function maximiseCall() {
-  callMinimised = false;
-  document.getElementById("mini-call-bar").style.display = "none";
-  callEl("call-overlay").style.display = "flex";
-  showCallOverlay("active");
-}
-
-callEl("call-minimise-btn").addEventListener("click", minimiseCall);
-document.getElementById("mini-call-maximise").addEventListener("click", maximiseCall);
-document.getElementById("mini-call-end").addEventListener("click", () => {
-  sendSignal("hangup", {});
-  const dur = callStartEpoch ? Math.round((Date.now()-callStartEpoch)/1000) : 0;
-  logCall("completed", dur);
-  endCall(false);
-  document.getElementById("mini-call-bar").style.display = "none";
-});
-
-// Update mini bar timer in sync with main timer
-const _origStartCallTimer = startCallTimer;
-function startCallTimer() {
-  callSeconds = 0;
-  callEl("call-timer").style.display = "block";
-  callTimerInt = setInterval(() => {
-    callSeconds++;
-    const m = String(Math.floor(callSeconds/60)).padStart(2,"0");
-    const s = String(callSeconds%60).padStart(2,"0");
-    const timeStr = `${m}:${s}`;
-    callEl("call-timer").textContent = timeStr;
-    // Also update mini bar
-    const miniTimer = document.getElementById("mini-call-timer-bar");
-    if (miniTimer) miniTimer.textContent = timeStr;
-  }, 1000);
-}
-
-// ── Incoming call notification (plays for both audio and video) ────────────────
-function playRingtone() {
-  stopRingtone();
-  // Initialise audio context if needed
-  if (!audioCtx) {
-    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(_) { return; }
-  }
-  if (audioCtx.state === "suspended") audioCtx.resume();
-
-  let tick = 0;
-  function ring() {
-    try {
-      const osc  = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.connect(gain); gain.connect(audioCtx.destination);
-      // Alternating tones: 880Hz / 660Hz pattern
-      osc.frequency.value = tick % 2 === 0 ? 880 : 660;
-      gain.gain.setValueAtTime(0, audioCtx.currentTime);
-      gain.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + 0.05);
-      gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.38);
-      osc.start(audioCtx.currentTime);
-      osc.stop(audioCtx.currentTime + 0.4);
-      tick++;
-    } catch(_) {}
-  }
-  ring();
-  ringtoneTimer = setInterval(ring, 1600);
-}
-
-function callEl(id) { return document.getElementById(id); }
-
-function showCallOverlay(mode) {
-  // mode: "outgoing" | "incoming" | "active"
-  callEl("call-overlay").style.display = "flex";
-  callEl("call-status-panel").style.display  = mode !== "incoming" ? "flex" : "none";
-  callEl("incoming-panel").style.display     = mode === "incoming"  ? "flex" : "none";
-  callEl("call-controls").style.display      = mode === "active"    ? "flex" : "none";
-  callEl("call-timer").style.display         = mode === "active"    ? "block": "none";
-  // Cancel button only during outgoing (ringing, not yet answered)
-  callEl("call-cancel-wrap").style.display   = mode === "outgoing"  ? "flex" : "none";
-}
-
-// ── Call cancel (outgoing before answer) ──────────────────────────────────────
-callEl("call-cancel-btn").addEventListener("click", () => {
-  sendSignal("hangup", {});
-  logCall("cancelled", 0);
-  endCall(false);
-});
-
-function hideCallOverlay() {
-  callEl("call-overlay").style.display = "none";
-  callEl("remote-video").style.opacity = "0";
-  callEl("local-video").style.display  = "none";
-  document.getElementById("mini-call-bar").style.display = "none";
-  callMinimised = false;
-  stopCallTimer();
-  stopRingtone();
-}
-
-function stopCallTimer() {
-  if (callTimerInt) { clearInterval(callTimerInt); callTimerInt = null; }
-}
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const callEl = id => document.getElementById(id);
 
 async function sendSignal(type, payload) {
   await api("/api/call/signal", {
@@ -1519,135 +1417,187 @@ async function sendSignal(type, payload) {
 
 function startCallPoll() {
   if (callPollTimer) return;
-  callPollTimer = setInterval(pollSignals, 1000);
+  callPollTimer = setInterval(async () => {
+    const sigs = await api("/api/call/poll").catch(() => []);
+    if (!Array.isArray(sigs)) return;
+    for (const s of sigs) {
+      const p = s.payload ? JSON.parse(s.payload) : {};
+      await handleSignal(s.type, p);
+    }
+  }, 1000);
 }
+
 function stopCallPoll() {
   if (callPollTimer) { clearInterval(callPollTimer); callPollTimer = null; }
 }
 
-async function pollSignals() {
-  // Always poll — must detect incoming calls even when idle
-  const signals = await api("/api/call/poll").catch(() => []);
-  if (!Array.isArray(signals)) return;
-  for (const sig of signals) {
-    const payload = sig.payload ? JSON.parse(sig.payload) : {};
-    await handleSignal(sig.type, payload);
+// ── Ringtone ──────────────────────────────────────────────────────────────────
+function playRingtone() {
+  stopRingtone();
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) { return; }
+  }
+  const ctx = audioCtx;
+  if (ctx.state === "suspended") ctx.resume();
+  let tick = 0;
+  function ring() {
+    try {
+      const osc = ctx.createOscillator();
+      const g   = ctx.createGain();
+      osc.connect(g); g.connect(ctx.destination);
+      osc.frequency.value = tick % 2 === 0 ? 880 : 660;
+      g.gain.setValueAtTime(0, ctx.currentTime);
+      g.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.06);
+      g.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.4);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.42);
+      tick++;
+    } catch(e) {}
+  }
+  ring();
+  ringtoneTimer = setInterval(ring, 1600);
+}
+function stopRingtone() {
+  if (ringtoneTimer) { clearInterval(ringtoneTimer); ringtoneTimer = null; }
+}
+
+// ── Timer ─────────────────────────────────────────────────────────────────────
+function startCallTimer() {
+  callSeconds = 0;
+  if (callTimerInt) clearInterval(callTimerInt);
+  callTimerInt = setInterval(() => {
+    callSeconds++;
+    const m = String(Math.floor(callSeconds / 60)).padStart(2, "0");
+    const s = String(callSeconds % 60).padStart(2, "0");
+    const t = `${m}:${s}`;
+    const el = callEl("call-timer");
+    if (el) el.textContent = t;
+    const mb = callEl("mini-call-timer-bar");
+    if (mb) mb.textContent = t;
+  }, 1000);
+}
+function stopCallTimer() {
+  if (callTimerInt) { clearInterval(callTimerInt); callTimerInt = null; }
+}
+
+// ── Overlay display ───────────────────────────────────────────────────────────
+function showCallOverlay(mode) {
+  callEl("call-overlay").style.display       = "flex";
+  callEl("call-status-panel").style.display  = mode !== "incoming" ? "flex" : "none";
+  callEl("incoming-panel").style.display     = mode === "incoming"  ? "flex" : "none";
+  callEl("call-controls").style.display      = mode === "active"    ? "flex" : "none";
+  callEl("call-timer").style.display         = mode === "active"    ? "block" : "none";
+  callEl("call-cancel-wrap").style.display   = mode === "outgoing"  ? "flex" : "none";
+  if (mode !== "active") {
+    callEl("remote-video").style.opacity = "0";
+    callEl("local-video").style.display  = "none";
   }
 }
 
-async function handleSignal(type, payload) {
-  const otherName = callEl("other-name").textContent || "them";
-  switch(type) {
-    case "ring":
-      if (callState !== "idle") { await sendSignal("busy", {}); return; }
-      callState    = "incoming";
-      callType     = payload.callType || "audio";
-      callStartedAt = new Date().toLocaleString("en-IN", {timeZone:"Asia/Kolkata"});
-      callStartEpoch = 0;
-      pendingOffer = payload.offer;
-      callEl("incoming-name").textContent = otherName;
-      callEl("incoming-type").textContent = callType === "video" ? "📹 Video Call" : "📞 Audio Call";
-      showCallOverlay("incoming");
-      playRingtone();
-      break;
-
-    case "answer":
-      if (callState !== "outgoing" || !pc) return;
-      stopRingtone();  // stop ringing when other side answers
-      await pc.setRemoteDescription(new RTCSessionDescription(payload));
-      callState = "active";
-      callStartEpoch = Date.now();
-      callEl("call-status").textContent = "Connected";
-      showCallOverlay("active");
-      startCallTimer();
-      break;
-
-    case "ice":
-      if (pc && payload) {
-        try { await pc.addIceCandidate(new RTCIceCandidate(payload)); } catch(_) {}
-      }
-      break;
-
-    case "hangup":
-    case "busy":
-    case "reject": {
-      const msg = type === "busy" ? "User is busy" : type === "reject" ? "Call declined" : "Call ended";
-      // Log from receiver perspective
-      const prevState = callState;
-      const dur = (prevState === "active" && callStartEpoch) ? Math.round((Date.now()-callStartEpoch)/1000) : 0;
-      const logStatus = prevState === "active" ? "completed" :
-                        type === "busy"        ? "busy"      :
-                        type === "reject"      ? "rejected"  : "missed";
-      if (prevState !== "idle") logCall(logStatus, dur);
-      endCall(false);
-      callEl("call-status").textContent = msg;
-      callEl("call-status-panel").style.display = "flex";
-      callEl("call-overlay").style.display = "flex";
-      setTimeout(hideCallOverlay, 2000);
-      break;
-    }
-  }
+function hideCallOverlay() {
+  callEl("call-overlay").style.display = "none";
+  callEl("mini-call-bar").style.display = "none";
+  callEl("remote-video").style.opacity = "0";
+  callEl("local-video").style.display  = "none";
+  callMinimised = false;
+  stopRingtone();
+  stopCallTimer();
 }
 
-async function startCall(type) {
-  if (callState !== "idle") return;
-  const otherName = callEl("other-name").textContent || "them";
-  callType  = type;
-  callState = "outgoing";
-  callStartedAt  = new Date().toLocaleString("en-IN", {timeZone:"Asia/Kolkata"});
-  callStartEpoch = Date.now();
+function minimiseCall() {
+  callMinimised = true;
+  callEl("call-overlay").style.display = "none";
+  callEl("mini-call-bar").style.display = "flex";
+  callEl("mini-call-name").textContent = callEl("call-name").textContent;
+  callEl("mini-call-icon").textContent = callType === "video" ? "📹" : "📞";
+}
 
-  callEl("call-name").textContent   = otherName;
-  callEl("call-status").textContent = type === "video" ? "📹 Starting video call…" : "📞 Calling…";
-  showCallOverlay("outgoing");
-  startCallPoll();
-  playRingtone();
+function maximiseCall() {
+  callMinimised = false;
+  callEl("mini-call-bar").style.display = "none";
+  callEl("call-overlay").style.display = "flex";
+  showCallOverlay("active");
+}
 
-  try {
-    localStream = await navigator.mediaDevices.getUserMedia(
-      type === "video" ? { audio: true, video: { facingMode: "user" } } : { audio: true, video: false }
-    );
-  } catch(e) {
-    callEl("call-status").textContent = "⚠ Camera/mic access denied";
-    setTimeout(hideCallOverlay, 2500);
-    callState = "idle"; stopCallPoll(); stopRingtone(); return;
-  }
+// ── Peer connection setup ─────────────────────────────────────────────────────
+function createPC(vType) {
+  if (pc) { try { pc.close(); } catch(e) {} }
+  pc = new RTCPeerConnection(ICE_SERVERS);
 
-  if (type === "video") {
-    callEl("local-video").srcObject = localStream;
-    callEl("local-video").style.display = "block";
-  }
-
-  pc = new RTCPeerConnection(ICESERVERS);
-  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+  pc.onicecandidate = e => {
+    if (e.candidate) sendSignal("ice", e.candidate.toJSON());
+  };
 
   pc.ontrack = e => {
     const rv = callEl("remote-video");
-    if (e.streams && e.streams[0]) {
-      rv.srcObject = e.streams[0];
-    } else {
-      if (!rv.srcObject) rv.srcObject = new MediaStream();
-      rv.srcObject.addTrack(e.track);
-    }
-    if (type === "video") {
+    // Build a stream from the incoming tracks
+    if (!rv.srcObject) rv.srcObject = new MediaStream();
+    rv.srcObject.addTrack(e.track);
+    if (vType === "video") {
       rv.style.opacity = "1";
-      rv.play().catch(()=>{});
     }
+    rv.play().catch(() => {});
   };
-  pc.onicecandidate = e => { if (e.candidate) sendSignal("ice", e.candidate); };
+
   pc.onconnectionstatechange = () => {
-    if (pc && (pc.connectionState === "failed" || pc.connectionState === "disconnected")) {
-      const dur = callStartEpoch ? Math.round((Date.now()-callStartEpoch)/1000) : 0;
+    if (!pc) return;
+    if (pc.connectionState === "connected") {
+      // Double-check remote video is playing
+      const rv = callEl("remote-video");
+      if (rv.srcObject && rv.paused) rv.play().catch(() => {});
+    }
+    if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
+      const dur = callStartEpoch ? Math.round((Date.now() - callStartEpoch) / 1000) : 0;
       logCall("completed", dur);
       endCall(false);
     }
   };
 
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-  await sendSignal("ring", { callType: type, offer });
+  return pc;
 }
 
+// ── Make a call ───────────────────────────────────────────────────────────────
+async function startCall(type) {
+  if (callState !== "idle") return;
+  const otherName = callEl("other-name").textContent || "them";
+  callType       = type;
+  callState      = "outgoing";
+  callStartedAt  = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+  callStartEpoch = 0;
+
+  callEl("call-name").textContent   = otherName;
+  callEl("call-status").textContent = type === "video" ? "📹 Calling…" : "📞 Calling…";
+  showCallOverlay("outgoing");
+  playRingtone();
+
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia(
+      type === "video"
+        ? { audio: true, video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } } }
+        : { audio: true, video: false }
+    );
+  } catch(e) {
+    callEl("call-status").textContent = "⚠ Camera/mic access denied";
+    await new Promise(r => setTimeout(r, 2500));
+    endCall(false); return;
+  }
+
+  if (type === "video") {
+    const lv = callEl("local-video");
+    lv.srcObject = localStream;
+    lv.style.display = "block";
+    lv.play().catch(() => {});
+  }
+
+  createPC(type);
+  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+
+  const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: type === "video" });
+  await pc.setLocalDescription(offer);
+  await sendSignal("ring", { callType: type, offer: pc.localDescription.toJSON() });
+}
+
+// ── Answer a call ─────────────────────────────────────────────────────────────
 async function acceptCall() {
   if (callState !== "incoming" || !pendingOffer) return;
   stopRingtone();
@@ -1656,116 +1606,150 @@ async function acceptCall() {
   try {
     localStream = await navigator.mediaDevices.getUserMedia(
       callType === "video"
-        ? { audio: true, video: { facingMode: "user", width: {ideal:640}, height: {ideal:480} } }
+        ? { audio: true, video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } } }
         : { audio: true, video: false }
     );
   } catch(e) {
     callEl("call-status").textContent = "⚠ Camera/mic access denied";
     callEl("call-status-panel").style.display = "flex";
     callEl("incoming-panel").style.display = "none";
-    setTimeout(hideCallOverlay, 2500);
-    callState = "idle"; stopCallPoll(); return;
+    await new Promise(r => setTimeout(r, 2500));
+    endCall(false); return;
   }
 
-  pc = new RTCPeerConnection(ICESERVERS);
-
-  // Add tracks BEFORE setRemoteDescription
-  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-
-  // Show local video immediately
   if (callType === "video") {
-    callEl("local-video").srcObject = localStream;
-    callEl("local-video").style.display = "block";
+    const lv = callEl("local-video");
+    lv.srcObject = localStream;
+    lv.style.display = "block";
+    lv.play().catch(() => {});
   }
 
-  // ontrack must be set before setRemoteDescription
-  pc.ontrack = e => {
-    const rv = callEl("remote-video");
-    if (e.streams && e.streams[0]) {
-      rv.srcObject = e.streams[0];
-    } else {
-      // Fallback: build stream from track directly
-      if (!rv.srcObject) rv.srcObject = new MediaStream();
-      rv.srcObject.addTrack(e.track);
-    }
-    if (callType === "video") {
-      rv.style.opacity = "1";
-      rv.play().catch(()=>{});
-    }
-  };
-
-  pc.onicecandidate = e => { if (e.candidate) sendSignal("ice", e.candidate); };
-  pc.onconnectionstatechange = () => {
-    if (pc && (pc.connectionState === "failed" || pc.connectionState === "disconnected")) {
-      const dur = callStartEpoch ? Math.round((Date.now()-callStartEpoch)/1000) : 0;
-      logCall("completed", dur);
-      endCall(false);
-    }
-  };
+  createPC(callType);
+  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
 
   await pc.setRemoteDescription(new RTCSessionDescription(pendingOffer));
   const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
-  await sendSignal("answer", answer);
+  await sendSignal("answer", pc.localDescription.toJSON());
 
-  callState = "active";
-  callStartedAt  = callStartedAt || new Date().toLocaleString("en-IN", {timeZone:"Asia/Kolkata"});
+  pendingOffer   = null;
+  callState      = "active";
+  callStartedAt  = callStartedAt || new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
   callStartEpoch = Date.now();
+
   callEl("call-name").textContent   = otherName;
   callEl("call-status").textContent = "Connected";
   showCallOverlay("active");
   startCallTimer();
-  pendingOffer = null;
 }
 
+// ── Reject / End / Cancel ─────────────────────────────────────────────────────
 function rejectCall() {
   logCall("rejected", 0);
   sendSignal("reject", {});
   endCall(false);
 }
 
-function endCall(sendHangup=true) {
-  // Log completed call when caller ends it (end button or connection drop)
-  if (callState === "active" && sendHangup) {
-    const dur = callStartEpoch ? Math.round((Date.now()-callStartEpoch)/1000) : 0;
-    logCall("completed", dur);
-  } else if (callState === "outgoing" && sendHangup) {
-    // Caller ended before answer — already logged as cancelled in cancel button
-    // Only log here if endCall called for other reasons
-  }
+function endCall(sendHangup = true) {
   if (sendHangup && callState !== "idle") sendSignal("hangup", {});
-  callState = "idle";
-  pendingOffer = null;
-  callStartedAt = null; callStartEpoch = 0;
+  const prevState = callState;
+  callState       = "idle";
+  pendingOffer    = null;
   stopRingtone();
-  stopCallPoll();
   stopCallTimer();
-  if (pc) { try { pc.close(); } catch(_) {} pc = null; }
+  if (pc)          { try { pc.close(); } catch(e) {} pc = null; }
   if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
   const rv = callEl("remote-video");
   if (rv) { rv.srcObject = null; rv.style.opacity = "0"; }
   const lv = callEl("local-video");
   if (lv) { lv.srcObject = null; lv.style.display = "none"; }
-  hideCallOverlay();
   micMuted = false; camOff = false;
+  callStartEpoch = 0; callStartedAt = null;
+  hideCallOverlay();
 }
 
-// Call button event listeners
-document.getElementById("audio-call-btn").addEventListener("click", () => startCall("audio"));
-document.getElementById("video-call-btn").addEventListener("click", () => startCall("video"));
-document.getElementById("hm-audio-call-btn").addEventListener("click", () => {
-  document.getElementById("hamburger-menu").classList.remove("open");
-  startCall("audio");
+// ── Signal handler ────────────────────────────────────────────────────────────
+async function handleSignal(type, payload) {
+  const otherName = callEl("other-name").textContent || "them";
+
+  if (type === "ring") {
+    if (callState !== "idle") { await sendSignal("busy", {}); return; }
+    callState     = "incoming";
+    callType      = payload.callType || "audio";
+    callStartedAt = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+    callStartEpoch = 0;
+    pendingOffer  = payload.offer;
+    callEl("incoming-name").textContent = otherName;
+    callEl("incoming-type").textContent = callType === "video" ? "📹 Video Call" : "📞 Audio Call";
+    showCallOverlay("incoming");
+    callEl("incoming-panel").style.display = "flex";
+    callEl("call-status-panel").style.display = "none";
+    playRingtone();
+    return;
+  }
+
+  if (type === "answer") {
+    if (callState !== "outgoing" || !pc) return;
+    stopRingtone();
+    await pc.setRemoteDescription(new RTCSessionDescription(payload));
+    callState      = "active";
+    callStartEpoch = Date.now();
+    callEl("call-status").textContent = "Connected";
+    showCallOverlay("active");
+    startCallTimer();
+    return;
+  }
+
+  if (type === "ice") {
+    if (pc && payload && payload.candidate) {
+      try { await pc.addIceCandidate(new RTCIceCandidate(payload)); } catch(e) {}
+    }
+    return;
+  }
+
+  if (type === "hangup" || type === "reject" || type === "busy") {
+    const prevState = callState;
+    const dur = (prevState === "active" && callStartEpoch)
+                ? Math.round((Date.now() - callStartEpoch) / 1000) : 0;
+    const status = prevState === "active" ? "completed"
+                 : type === "reject"     ? "rejected"
+                 : type === "busy"       ? "busy" : "missed";
+    if (prevState !== "idle") logCall(status, dur);
+    endCall(false);
+    const msg = type === "busy" ? "User is busy"
+              : type === "reject" ? "Call declined" : "Call ended";
+    callEl("call-status").textContent = msg;
+    callEl("call-status-panel").style.display = "flex";
+    callEl("call-overlay").style.display = "flex";
+    setTimeout(hideCallOverlay, 2000);
+    return;
+  }
+}
+
+// ── Button wiring ─────────────────────────────────────────────────────────────
+callEl("audio-call-btn").addEventListener("click", () => startCall("audio"));
+callEl("video-call-btn").addEventListener("click", () => startCall("video"));
+callEl("hm-audio-call-btn").addEventListener("click", () => {
+  callEl("hamburger-menu").classList.remove("open"); startCall("audio");
 });
-document.getElementById("hm-video-call-btn").addEventListener("click", () => {
-  document.getElementById("hamburger-menu").classList.remove("open");
-  startCall("video");
+callEl("hm-video-call-btn").addEventListener("click", () => {
+  callEl("hamburger-menu").classList.remove("open"); startCall("video");
 });
 callEl("call-accept-btn").addEventListener("click", acceptCall);
 callEl("call-reject-btn").addEventListener("click", rejectCall);
-callEl("call-end-btn").addEventListener("click", () => { sendSignal("hangup", {}); endCall(false); });
-
-// Mute mic toggle
+callEl("call-cancel-btn").addEventListener("click", () => {
+  sendSignal("hangup", {}); logCall("cancelled", 0); endCall(false);
+});
+callEl("call-end-btn").addEventListener("click", () => {
+  const dur = callStartEpoch ? Math.round((Date.now() - callStartEpoch) / 1000) : 0;
+  logCall("completed", dur); endCall(false);
+});
+callEl("call-minimise-btn").addEventListener("click", minimiseCall);
+callEl("mini-call-maximise").addEventListener("click", maximiseCall);
+callEl("mini-call-end").addEventListener("click", () => {
+  const dur = callStartEpoch ? Math.round((Date.now() - callStartEpoch) / 1000) : 0;
+  logCall("completed", dur); endCall(false);
+});
 callEl("call-mute-btn").addEventListener("click", () => {
   if (!localStream) return;
   micMuted = !micMuted;
@@ -1773,20 +1757,16 @@ callEl("call-mute-btn").addEventListener("click", () => {
   callEl("call-mute-btn").textContent = micMuted ? "🔇" : "🎙️";
   callEl("call-mute-btn").style.background = micMuted ? "rgba(234,57,67,.5)" : "rgba(255,255,255,.15)";
 });
-
-// Camera toggle
 callEl("call-cam-btn").addEventListener("click", () => {
   if (!localStream) return;
-  const vTracks = localStream.getVideoTracks();
-  if (!vTracks.length) return;
+  const vt = localStream.getVideoTracks();
+  if (!vt.length) return;
   camOff = !camOff;
-  vTracks.forEach(t => t.enabled = !camOff);
+  vt.forEach(t => t.enabled = !camOff);
   callEl("call-cam-btn").textContent = camOff ? "🚫" : "📷";
   callEl("call-cam-btn").style.background = camOff ? "rgba(234,57,67,.5)" : "rgba(255,255,255,.15)";
   callEl("local-video").style.opacity = camOff ? "0.3" : "1";
 });
-
-// Speaker toggle (only meaningful on mobile)
 callEl("call-speaker-btn").addEventListener("click", () => {
   const rv = callEl("remote-video");
   if (!rv) return;
@@ -1794,8 +1774,6 @@ callEl("call-speaker-btn").addEventListener("click", () => {
   callEl("call-speaker-btn").textContent = rv.muted ? "🔇" : "🔊";
   callEl("call-speaker-btn").style.background = rv.muted ? "rgba(234,57,67,.5)" : "rgba(255,255,255,.15)";
 });
-
-// Call cleanup on logout handled directly in each logout handler above
 
 // ── Call logging ───────────────────────────────────────────────────────────────
 let callStartedAt  = null;  // IST string when call started
