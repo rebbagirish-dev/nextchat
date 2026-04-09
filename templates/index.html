@@ -1383,19 +1383,7 @@ document.addEventListener("visibilitychange", () => {
 });
 
 // ── WebRTC Calling Engine (clean rewrite) ────────────────────────────────────
-// Free public TURN servers (metered.ca provides free tier)
-// These relay traffic when direct P2P fails (NAT/firewall)
-const ICE_SERVERS = { iceServers: [
-  { urls: "stun:stun.l.google.com:19302" },
-  { urls: "stun:stun1.l.google.com:19302" },
-  // Free TURN servers from open-relay
-  { urls: "turn:openrelay.metered.ca:80",
-    username: "openrelayproject", credential: "openrelayproject" },
-  { urls: "turn:openrelay.metered.ca:443",
-    username: "openrelayproject", credential: "openrelayproject" },
-  { urls: "turn:openrelay.metered.ca:443?transport=tcp",
-    username: "openrelayproject", credential: "openrelayproject" },
-]};
+// ── ICE / TURN config and createPC are defined below with the calling engine ──
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let pc            = null;
@@ -1528,45 +1516,68 @@ function maximiseCall() {
 }
 
 // ── Peer connection setup ─────────────────────────────────────────────────────
+// ── ICE / TURN config ────────────────────────────────────────────────────────
+const ICE_SERVERS = { iceServers: [
+  { urls: "stun:stun.l.google.com:19302" },
+  { urls: "stun:stun1.l.google.com:19302" },
+  // Metered free TURN (most reliable free option)
+  { urls: "turn:openrelay.metered.ca:80",      username: "openrelayproject", credential: "openrelayproject" },
+  { urls: "turn:openrelay.metered.ca:443",     username: "openrelayproject", credential: "openrelayproject" },
+  { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" },
+  // Backup TURN
+  { urls: "turn:relay.metered.ca:80",          username: "openrelayproject", credential: "openrelayproject" },
+  { urls: "turn:relay.metered.ca:443",         username: "openrelayproject", credential: "openrelayproject" },
+]};
+
+// Wait up to 5s for ICE gathering — all candidates bundled in SDP, no trickle needed
+function waitForICE(peerConn) {
+  return new Promise(resolve => {
+    if (peerConn.iceGatheringState === "complete") { resolve(); return; }
+    const done = () => { peerConn.onicegatheringstatechange = null; resolve(); };
+    peerConn.onicegatheringstatechange = () => {
+      if (peerConn.iceGatheringState === "complete") done();
+    };
+    setTimeout(done, 5000); // 5s max wait
+  });
+}
+
 function createPC(vType) {
   if (pc) { try { pc.close(); } catch(e) {} pc = null; }
   pc = new RTCPeerConnection(ICE_SERVERS);
 
-  // Collect remote tracks into a stable MediaStream
+  // Pre-assign a stable MediaStream to remote video
   const remoteStream = new MediaStream();
   const rv = callEl("remote-video");
   rv.srcObject = remoteStream;
+  rv.style.opacity = "0";
 
   pc.ontrack = e => {
-    // Add each track to the remote stream
     remoteStream.addTrack(e.track);
-    e.track.onunmute = () => {
-      if (vType === "video" && e.track.kind === "video") rv.style.opacity = "1";
-      rv.play().catch(() => {});
-    };
-    // Also try playing immediately
-    if (vType === "video" && e.track.kind === "video") rv.style.opacity = "1";
+    // Show video as soon as video track arrives and unmutes
+    if (e.track.kind === "video") {
+      e.track.onunmute = () => { rv.style.opacity = "1"; };
+      if (e.track.readyState === "live") rv.style.opacity = "1";
+    }
+    // For audio: no visual change needed, just ensure playing
+    // Use a user-gesture-safe play via the accept/answer button chain
     rv.play().catch(() => {});
   };
 
-  pc.onicecandidate = e => {
-    if (e.candidate) {
-      sendSignal("ice", e.candidate.toJSON());
-    }
-  };
+  // Do NOT send trickle ICE — we bundle everything in the SDP via waitForICE
+  pc.onicecandidate = () => {}; // intentionally no-op
 
   pc.oniceconnectionstatechange = () => {
-    const state = pc ? pc.iceConnectionState : "";
-    // Update call status with connection progress
+    if (!pc) return;
+    const state = pc.iceConnectionState;
     const statusEl = callEl("call-status");
-    if (state === "checking")     { if(statusEl) statusEl.textContent = "Connecting…"; }
+    if (state === "checking")                    { if (statusEl) statusEl.textContent = "Connecting…"; }
     if (state === "connected" || state === "completed") {
-      if(statusEl) statusEl.textContent = "Connected";
+      if (statusEl) statusEl.textContent = "Connected";
       rv.play().catch(() => {});
     }
     if (state === "failed") {
-      if(statusEl) statusEl.textContent = "⚠ Connection failed";
-      setTimeout(() => endCall(true), 2000);
+      if (statusEl) statusEl.textContent = "⚠ Connection failed — check network";
+      setTimeout(() => { if (callState === "active") endCall(true); }, 3000);
     }
   };
 
@@ -1581,18 +1592,6 @@ function createPC(vType) {
   };
 
   return pc;
-}
-
-// Wait for ICE gathering to complete before sending SDP
-function waitForICE(peerConn) {
-  return new Promise(resolve => {
-    if (peerConn.iceGatheringState === "complete") { resolve(); return; }
-    peerConn.onicegatheringstatechange = () => {
-      if (peerConn.iceGatheringState === "complete") resolve();
-    };
-    // Timeout after 3s — send whatever we have
-    setTimeout(resolve, 3000);
-  });
 }
 
 // ── Make a call ───────────────────────────────────────────────────────────────
@@ -1743,13 +1742,6 @@ async function handleSignal(type, payload) {
     callEl("call-status").textContent = "Connected";
     showCallOverlay("active");
     startCallTimer();
-    return;
-  }
-
-  if (type === "ice") {
-    if (pc && payload && payload.candidate) {
-      try { await pc.addIceCandidate(new RTCIceCandidate(payload)); } catch(e) {}
-    }
     return;
   }
 
