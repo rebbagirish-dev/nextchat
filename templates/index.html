@@ -45,39 +45,9 @@
   --font: 'DM Sans', sans-serif;
 }
 
-/* ── Light theme ── */
-html.light {
-  --bg-app:       #F0F2F5;
-  --bg-chat:      #EAE4D9;
-  --bg-header:    #FFFFFF;
-  --bg-input-bar: #FFFFFF;
-  --bg-input:     #F0F2F5;
-  --bg-me:        #D9FDD3;
-  --bg-them:      #FFFFFF;
-  --accent:       #00A884;
-  --accent-light: #25D366;
-  --text:         #111B21;
-  --text-sub:     #667781;
-  --tick-grey:    #667781;
-  --tick-blue:    #53BDEB;
-  --danger:       #EA3943;
-  --divider:      #E9EDEF;
-  --hover:        #F0F2F5;
-  --login-bg1:    #e8f4f1;
-  --login-bg2:    #d4ece6;
-  --login-bg3:    #e0f0eb;
-  --login-card:   rgba(255,255,255,.97);
-  --login-border: rgba(0,168,132,.3);
-  --login-grid:   rgba(0,168,132,.06);
-  --lock-bg:      rgba(255,255,255,.97);
-}
 
-/* Smooth transition on theme switch */
-html, body, #login-screen, #lock-overlay, .login-card, .lock-card,
-.chat-header, #chat-area, .input-bar, .bubble, .dropdown-menu,
-.modal, .emoji-picker, .fmt-toolbar, .typing-indicator {
-  transition: background-color .3s ease, color .3s ease, border-color .3s ease;
-}
+
+
 html { height: 100%; height: 100dvh; }
 body {
   height: 100%; height: 100dvh;
@@ -172,15 +142,7 @@ body {
   --xl-sel:#217346; --xl-text:#212121; --xl-sub:#595959;
   --xl-formula:#FFFFFF; --xl-status:#217346;
 }
-html:not(.light) {
-  --xl-bg:#1E1E1E; --xl-ribbon:#1a5c38; --xl-ribbon2:#145230;
-  --xl-tab-active:#2D2D2D; --xl-tab:#252525;
-  --xl-header-row:#2D2D2D; --xl-col-head:#252525;
-  --xl-border:#3A3A3A; --xl-cell:#2D2D2D;
-  --xl-cell-me:#1e3a2a; --xl-cell-them:#2D2D2D;
-  --xl-formula:#2D2D2D; --xl-text:#D4D4D4;
-  --xl-sub:#909090; --xl-status:#6dbf8a;
-}
+
 
 /* Ribbon */
 .xl-ribbon { background:var(--xl-ribbon); display:flex; align-items:center; padding:0 8px; height:34px; flex-shrink:0; gap:2px; }
@@ -402,7 +364,6 @@ html:not(.light) {
     <div class="xl-title">WorkLog — <span id="other-name">—</span>.xlsx</div>
     <div class="xl-ribbon-btns">
       <!-- Desktop buttons (hidden on mobile) -->
-      <button class="xl-icon-btn desktop-only" id="theme-btn" title="Toggle theme">🌙</button>
       <button class="xl-icon-btn desktop-only" id="audio-call-btn" title="Audio Call">📞</button>
       <button class="xl-icon-btn desktop-only" id="video-call-btn" title="Video Call">📹</button>
       <button class="xl-icon-btn desktop-only" id="call-history-btn" title="Call History">📋</button>
@@ -425,7 +386,6 @@ html:not(.light) {
         </button>
         <div class="dropdown-menu hamburger-menu" id="hamburger-menu">
           <div class="hamburger-header">Menu</div>
-          <button id="hm-theme-btn">🌙&nbsp; <span id="hm-theme-label">Switch to Light</span></button>
           <button id="hm-audio-call-btn">📞&nbsp; Audio Call</button>
           <button id="hm-video-call-btn">📹&nbsp; Video Call</button>
           <button id="hm-call-history-btn">📋&nbsp; Call History</button>
@@ -855,10 +815,12 @@ async function loadMessages() {
     numCell.className = "xl-row-num";
     numCell.textContent = rowNum;
 
-    // Column A - timestamp
+    // Column A - timestamp (click to re-encrypt a visible message)
     const cellA = document.createElement("div");
     cellA.className = "xl-cell-a";
     cellA.textContent = msg.timestamp;
+    cellA.style.cursor = "pointer";
+    cellA.title = "Click to encrypt this row";
 
     // Column B - username
     const cellB = document.createElement("div");
@@ -874,6 +836,8 @@ async function loadMessages() {
 
     if (!isVisible && !isRevealed) {
       cellC.className = `xl-cell-c ${isMe ? "me-cell" : "them-cell"} encrypted-cell`;
+      cellA.style.cursor = "default";
+      cellA.title = "";
       if (isImage) {
         cellC.innerHTML = `<span class="xl-lock">🔒</span> 📎 <em style="font-size:11px">Attachment encrypted</em>`;
       } else {
@@ -891,7 +855,6 @@ async function loadMessages() {
     } else {
       cellC.className = `xl-cell-c ${isMe ? "me-cell" : "them-cell"}`;
       if (isImage) {
-        // Extract dataUrl and optional caption
         const rest    = msg.body.slice(IMG_PREFIX.length);
         const nlIdx   = rest.indexOf("\n");
         const dataUrl = nlIdx >= 0 ? rest.slice(0, nlIdx) : rest;
@@ -911,6 +874,23 @@ async function loadMessages() {
       } else {
         cellC.innerHTML = formatBody(msg.body);
       }
+
+      // Click on timestamp (col A) encrypts this visible row immediately
+      cellA.addEventListener("click", e => {
+        e.stopPropagation();
+        // Remove from revealedMsgs so it stays encrypted
+        revealedMsgs.delete(msg.id);
+        visibleIndices.delete(idx);
+        // Re-render just this cell to encrypted state
+        cellA.style.cursor = "default";
+        cellA.title = "";
+        cellC.className = `xl-cell-c ${isMe ? "me-cell" : "them-cell"} encrypted-cell`;
+        if (isImage) {
+          cellC.innerHTML = `<span class="xl-lock">🔒</span> 📎 <em style="font-size:11px">Attachment encrypted</em>`;
+        } else {
+          cellC.innerHTML = `<span class="xl-lock">🔒</span>${escHtml(encryptText(msg.body, msg.id))}`;
+        }
+      });
     }
 
     // Column D - time only
@@ -1181,22 +1161,6 @@ document.getElementById("fmt-emoji").addEventListener("click", e => {
 document.addEventListener("click", () => document.getElementById("emoji-picker").classList.remove("open"));
 
 // ── Header buttons ─────────────────────────────────────────────────────────────
-function applyThemeBtn() {
-  const label = document.getElementById("hm-theme-label");
-  if (label) label.textContent = isLight ? "Switch to Dark" : "Switch to Light";
-  const tb = document.getElementById("theme-btn");
-  if (tb) tb.textContent = isLight ? "☀️" : "🌙";
-  const hmtb = document.getElementById("hm-theme-btn");
-  if (hmtb) hmtb.firstChild.textContent = isLight ? "☀️\u00a0" : "🌙\u00a0";
-}
-
-function toggleTheme() {
-  isLight = !isLight;
-  localStorage.setItem("nexchat_theme", isLight ? "light" : "dark");
-  applyTheme();
-  applyThemeBtn();
-}
-
 function toggleMute() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   if (audioCtx.state === "suspended") audioCtx.resume();
@@ -1207,26 +1171,31 @@ function toggleMute() {
   if (label) label.textContent = isMuted ? "Unmute Notifications" : "Mute Notifications";
 }
 
+// Shared logout logic
+async function doLogout() {
+  if (pollTimer) clearInterval(pollTimer);
+  try { stopCallPoll(); } catch(e) {}
+  try { endCall(false); } catch(e) {}
+  document.title = BASE_TITLE;
+  try { hideLock(); } catch(e) {}
+  await api("/logout", {method:"POST"}).catch(()=>{});
+  clearAuth();
+  history.replaceState(null, "", "/logged-out");
+  showLogin();
+}
+
 // Desktop buttons
-document.getElementById("theme-btn").addEventListener("click", toggleTheme);
 document.getElementById("mute-btn").addEventListener("click", toggleMute);
 document.getElementById("header-clear-btn").addEventListener("click", () => document.getElementById("clear-modal").classList.add("open"));
 document.getElementById("menu-btn").addEventListener("click", e => { e.stopPropagation(); document.getElementById("dropdown-menu").classList.toggle("open"); });
 
 // Hamburger menu
 document.getElementById("hamburger-btn").addEventListener("click", e => { e.stopPropagation(); document.getElementById("hamburger-menu").classList.toggle("open"); });
-document.getElementById("hm-theme-btn") .addEventListener("click", () => { toggleTheme(); document.getElementById("hamburger-menu").classList.remove("open"); });
 document.getElementById("hm-mute-btn")  .addEventListener("click", () => { toggleMute();  document.getElementById("hamburger-menu").classList.remove("open"); });
 document.getElementById("hm-clear-btn") .addEventListener("click", () => { document.getElementById("hamburger-menu").classList.remove("open"); document.getElementById("clear-modal").classList.add("open"); });
 document.getElementById("hm-logout-btn").addEventListener("click", async () => {
   document.getElementById("hamburger-menu").classList.remove("open");
-  if (pollTimer) clearInterval(pollTimer);
-  stopCallPoll();
-  endCall(false);
-  document.title = BASE_TITLE; hideLock();
-  await api("/logout", {method:"POST"}).catch(()=>{});  // must be before clearAuth
-  clearAuth();
-  history.replaceState(null,"","/logged-out"); showLogin();
+  await doLogout();
 });
 
 document.addEventListener("click", () => {
@@ -1312,15 +1281,7 @@ window.addEventListener("popstate", async (e) => {
   showLogin();
 });
 document.getElementById("logout-btn").addEventListener("click", async () => {
-  if (pollTimer) clearInterval(pollTimer);
-  stopCallPoll();
-  endCall(false);
-  document.title = BASE_TITLE;
-  hideLock();
-  await api("/logout", {method:"POST"}).catch(()=>{});  // must be before clearAuth
-  clearAuth();
-  history.replaceState(null, "", "/logged-out");
-  showLogin();
+  await doLogout();
 });
 
 function showLogin() {
@@ -1872,21 +1833,9 @@ if ("serviceWorker" in navigator) {
 // ── Keep-alive ping (prevents Render free tier from sleeping) ─────────────────
 setInterval(() => fetch("/keep-alive").catch(() => {}), 10 * 60 * 1000);
 
-// ── Theme toggle ───────────────────────────────────────────────────────────────
-let isLight = localStorage.getItem("nexchat_theme") === "light";
-
-function applyTheme() {
-  if (isLight) {
-    document.documentElement.classList.add("light");
-  } else {
-    document.documentElement.classList.remove("light");
-  }
-}
-
 // ── Boot ───────────────────────────────────────────────────────────────────────
-applyTheme();
+document.documentElement.classList.add("light"); // always light theme
 updateMuteBtn();
-// applyThemeBtn called after DOM ready via header buttons section
 document.title = BASE_TITLE;
 (async () => { if (authToken) await initApp(); })();
 </script>
