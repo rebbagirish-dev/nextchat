@@ -1379,7 +1379,7 @@ function createPC() {
     if (!pc) return;
     const s = pc.iceConnectionState;
     const st = callEl("call-status");
-    if (s === "checking")                      if (st) st.textContent = "Connecting…";
+    if (s === "checking" && st) st.textContent = "Connecting…";
     if (s === "connected" || s === "completed") {
       if (st) st.textContent = "Connected";
       rv.play().catch(() => {});
