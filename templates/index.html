@@ -1343,9 +1343,21 @@ document.addEventListener("visibilitychange", () => {
   else { _unshieldRecents(); document.title = BASE_TITLE; }
 });
 
-// ── WebRTC Calling Engine (clean rewrite) ────────────────────────────────────
-// ── WebRTC Engine ────────────────────────────────────────────────────────────
-// Strategy: trickle ICE via DB signaling, 800ms poll during call setup
+// ── WebRTC Calling Engine ─────────────────────────────────────────────────────
+const callEl = id => document.getElementById(id);
+
+// Call state
+let pc             = null;
+let localStream    = null;
+let callType       = null;
+let callState      = "idle";
+let callMinimised  = false;
+let micMuted       = false;
+let camOff         = false;
+let pendingOffer   = null;
+let callStartEpoch = 0;
+let callStartedAt  = null;
+
 const ICE_SERVERS = { iceServers: [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
