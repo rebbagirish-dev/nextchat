@@ -252,6 +252,14 @@ body {
 .xl-status-bar span { font-size:11px; color:rgba(255,255,255,.8); font-family:'Calibri',sans-serif; }
 .xl-status-bar .xl-online { color:#fff; font-weight:600; }
 
+.setting-chip {
+  padding:5px 14px; background:var(--xl-col-head); border:1px solid var(--xl-border);
+  border-radius:20px; font-size:12px; cursor:pointer; font-family:'Calibri',sans-serif;
+  color:var(--xl-text); transition:all .15s;
+}
+.setting-chip:hover { background:var(--xl-header-row); border-color:#aaa; }
+.setting-chip.active { background:var(--xl-sel); color:#fff; border-color:var(--xl-sel); font-weight:600; }
+
 /* Modal */
 .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:500; align-items:center; justify-content:center; }
 .modal-overlay.open { display:flex; animation:fadeIn .2s; }
@@ -367,6 +375,7 @@ body {
       <button class="xl-icon-btn desktop-only" id="audio-call-btn" title="Audio Call">📞</button>
       <button class="xl-icon-btn desktop-only" id="video-call-btn" title="Video Call">📹</button>
       <button class="xl-icon-btn desktop-only" id="call-history-btn" title="Call History">📋</button>
+      <button class="xl-icon-btn desktop-only" id="settings-btn" title="Settings">⚙️</button>
       <button class="xl-icon-btn desktop-only" id="header-clear-btn" title="Clear">🗑</button>
       <button class="xl-icon-btn desktop-only" id="mute-btn" title="Mute">🔔</button>
       <div class="dropdown desktop-only" id="menu-dropdown">
@@ -389,6 +398,7 @@ body {
           <button id="hm-audio-call-btn">📞&nbsp; Audio Call</button>
           <button id="hm-video-call-btn">📹&nbsp; Video Call</button>
           <button id="hm-call-history-btn">📋&nbsp; Call History</button>
+          <button id="hm-settings-btn">⚙️&nbsp; Settings</button>
           <button id="hm-mute-btn">🔔&nbsp; <span id="hm-mute-label">Mute Notifications</span></button>
           <button id="hm-clear-btn">🗑&nbsp; Clear History</button>
           <hr/>
@@ -500,6 +510,54 @@ body {
     <div style="margin-top:14px;display:flex;justify-content:flex-end;gap:8px;">
       <button class="btn-cancel" id="call-history-clear-btn">Clear History</button>
       <button class="btn-cancel" id="call-history-close2">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings modal -->
+<div class="modal-overlay" id="settings-modal">
+  <div class="modal" style="max-width:360px;width:94%;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+      <h3 style="margin:0;">⚙️ Settings</h3>
+      <button id="settings-close" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--xl-sub);">✕</button>
+    </div>
+
+    <!-- Decrypt display time -->
+    <div style="margin-bottom:20px;">
+      <label style="display:block;font-size:12px;font-weight:600;color:var(--xl-text);margin-bottom:8px;font-family:'Calibri',sans-serif;">
+        🔓 Decrypted message display time
+      </label>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="setting-chip" data-setting="revealTime" data-value="5000">5s</button>
+        <button class="setting-chip" data-setting="revealTime" data-value="10000">10s</button>
+        <button class="setting-chip" data-setting="revealTime" data-value="20000">20s</button>
+        <button class="setting-chip" data-setting="revealTime" data-value="30000">30s</button>
+        <button class="setting-chip" data-setting="revealTime" data-value="60000">60s</button>
+      </div>
+      <div style="margin-top:6px;font-size:11px;color:var(--xl-sub);font-family:'Calibri',sans-serif;">
+        Current: <span id="reveal-time-label">5s</span>
+      </div>
+    </div>
+
+    <!-- Font size -->
+    <div style="margin-bottom:8px;">
+      <label style="display:block;font-size:12px;font-weight:600;color:var(--xl-text);margin-bottom:8px;font-family:'Calibri',sans-serif;">
+        🔤 Message font size
+      </label>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="setting-chip" data-setting="fontSize" data-value="8">8</button>
+        <button class="setting-chip" data-setting="fontSize" data-value="10">10</button>
+        <button class="setting-chip" data-setting="fontSize" data-value="12">12</button>
+        <button class="setting-chip" data-setting="fontSize" data-value="14">14</button>
+        <button class="setting-chip" data-setting="fontSize" data-value="16">16</button>
+      </div>
+      <div style="margin-top:6px;font-size:11px;color:var(--xl-sub);font-family:'Calibri',sans-serif;">
+        Current: <span id="font-size-label">12</span>px
+      </div>
+    </div>
+
+    <div style="margin-top:18px;display:flex;justify-content:flex-end;">
+      <button class="btn-cancel" id="settings-close2">Close</button>
     </div>
   </div>
 </div>
@@ -655,7 +713,7 @@ function revealBubble(bubble, originalText, msgId) {
     revealedMsgs.delete(msgId);
     bubble.classList.remove("revealing"); bubble.classList.add("encrypted");
     bodyEl.innerHTML = `<span class="lock-icon">🔒</span>${escHtml(encryptText(originalText, msgId))}`;
-  }, 2500);
+  }, typeof revealTime !== "undefined" ? revealTime : 5000);
 }
 
 // ── Auth helpers ───────────────────────────────────────────────────────────────
@@ -958,7 +1016,7 @@ function revealRow(row, originalText, msgId) {
     } else {
       cell.innerHTML = `<span class="xl-lock">🔒</span>${escHtml(encryptText(originalText, msgId))}`;
     }
-  }, 2500);
+  }, typeof revealTime !== "undefined" ? revealTime : 5000);
 }
 // ── Image upload ───────────────────────────────────────────────────────────────
 let pendingImage = null;  // { dataUrl, name }
@@ -1843,12 +1901,84 @@ if ("serviceWorker" in navigator) {
   });
 }
 
+// ── Settings ──────────────────────────────────────────────────────────────────
+let revealTime = parseInt(localStorage.getItem("nx_revealTime") || "5000");
+let appFontSize = parseInt(localStorage.getItem("nx_fontSize") || "12");
+
+function applyFontSize() {
+  // Apply to message cells and input
+  const style = document.getElementById("dynamic-font-style") ||
+    (() => { const s = document.createElement("style"); s.id = "dynamic-font-style"; document.head.appendChild(s); return s; })();
+  style.textContent = `
+    .xl-cell-c { font-size: ${appFontSize}px !important; }
+    #msg-input  { font-size: ${Math.max(appFontSize, 14)}px !important; }
+    .xl-cell-a, .xl-cell-b, .xl-cell-d { font-size: ${Math.max(appFontSize - 1, 8)}px !important; }
+  `;
+  document.getElementById("font-size-label") && (document.getElementById("font-size-label").textContent = appFontSize);
+}
+
+function applyRevealLabel() {
+  const secs = revealTime / 1000;
+  const el = document.getElementById("reveal-time-label");
+  if (el) el.textContent = secs + "s";
+}
+
+function updateSettingChips() {
+  document.querySelectorAll(".setting-chip").forEach(btn => {
+    const setting = btn.dataset.setting;
+    const val     = parseInt(btn.dataset.value);
+    btn.classList.toggle("active",
+      setting === "revealTime" ? val === revealTime :
+      setting === "fontSize"   ? val === appFontSize : false
+    );
+  });
+}
+
+function openSettings() {
+  updateSettingChips();
+  applyRevealLabel();
+  document.getElementById("font-size-label").textContent = appFontSize;
+  document.getElementById("settings-modal").classList.add("open");
+}
+function closeSettings() {
+  document.getElementById("settings-modal").classList.remove("open");
+}
+
+document.getElementById("settings-btn").addEventListener("click", openSettings);
+document.getElementById("hm-settings-btn").addEventListener("click", () => {
+  document.getElementById("hamburger-menu").classList.remove("open");
+  openSettings();
+});
+document.getElementById("settings-close").addEventListener("click",  closeSettings);
+document.getElementById("settings-close2").addEventListener("click", closeSettings);
+document.getElementById("settings-modal").addEventListener("click", e => {
+  if (e.target === document.getElementById("settings-modal")) closeSettings();
+});
+
+document.querySelectorAll(".setting-chip").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const setting = btn.dataset.setting;
+    const val     = parseInt(btn.dataset.value);
+    if (setting === "revealTime") {
+      revealTime = val;
+      localStorage.setItem("nx_revealTime", val);
+      applyRevealLabel();
+    } else if (setting === "fontSize") {
+      appFontSize = val;
+      localStorage.setItem("nx_fontSize", val);
+      applyFontSize();
+    }
+    updateSettingChips();
+  });
+});
+
 // ── Keep-alive ping (prevents Render free tier from sleeping) ─────────────────
 setInterval(() => fetch("/keep-alive").catch(() => {}), 10 * 60 * 1000);
 
 // ── Boot ───────────────────────────────────────────────────────────────────────
 document.documentElement.classList.add("light"); // always light theme
 updateMuteBtn();
+applyFontSize();
 document.title = BASE_TITLE;
 (async () => { if (authToken) await initApp(); })();
 </script>
