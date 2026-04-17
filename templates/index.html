@@ -569,6 +569,83 @@ body {
 </div>
 
 <!-- ── CALL OVERLAY ── -->
+<div id="call-overlay" style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(10,20,30,.97);flex-direction:column;align-items:center;justify-content:center;">
+
+  <!-- Daily.co iframe injected here dynamically -->
+
+  <!-- Call status panel (outgoing) -->
+  <div id="call-status-panel" style="position:relative;z-index:5;display:flex;flex-direction:column;align-items:center;gap:18px;">
+    <div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#217346,#00a884);display:flex;align-items:center;justify-content:center;font-size:32px;">👤</div>
+    <div id="call-name"   style="color:#fff;font-size:22px;font-weight:600;font-family:'Calibri',sans-serif;"></div>
+    <div id="call-status" style="color:rgba(255,255,255,.6);font-size:14px;font-family:'Calibri',sans-serif;"></div>
+    <div id="call-timer"  style="color:#00a884;font-size:16px;font-family:'Calibri',monospace;display:none;"></div>
+    <div id="call-cancel-wrap" style="display:none;flex-direction:column;align-items:center;gap:8px;margin-top:8px;">
+      <button id="call-cancel-btn" style="width:64px;height:64px;border-radius:50%;background:#ea3943;border:none;font-size:26px;cursor:pointer;">📵</button>
+      <span style="color:rgba(255,255,255,.5);font-size:12px;font-family:'Calibri',sans-serif;">Cancel</span>
+    </div>
+  </div>
+
+  <!-- Incoming call panel -->
+  <div id="incoming-panel" style="display:none;flex-direction:column;align-items:center;gap:24px;position:relative;z-index:5;">
+    <div style="color:rgba(255,255,255,.6);font-size:13px;letter-spacing:1px;text-transform:uppercase;font-family:'Calibri',sans-serif;">Incoming Call</div>
+    <div id="incoming-name" style="color:#fff;font-size:24px;font-weight:700;font-family:'Calibri',sans-serif;"></div>
+    <div id="incoming-type" style="color:rgba(255,255,255,.5);font-size:13px;font-family:'Calibri',sans-serif;"></div>
+    <div style="display:flex;gap:32px;margin-top:8px;">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
+        <button id="call-reject-btn" style="width:64px;height:64px;border-radius:50%;background:#ea3943;border:none;font-size:26px;cursor:pointer;">📵</button>
+        <span style="color:rgba(255,255,255,.5);font-size:12px;font-family:'Calibri',sans-serif;">Decline</span>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
+        <button id="call-accept-btn" style="width:64px;height:64px;border-radius:50%;background:#217346;border:none;font-size:26px;cursor:pointer;">📞</button>
+        <span style="color:rgba(255,255,255,.5);font-size:12px;font-family:'Calibri',sans-serif;">Accept</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Active call controls (over Daily iframe) -->
+  <div id="call-controls" style="display:none;position:absolute;bottom:28px;left:0;right:0;z-index:10;justify-content:center;gap:20px;">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+      <button id="call-mute-btn" style="width:54px;height:54px;border-radius:50%;background:rgba(255,255,255,.15);border:none;font-size:22px;cursor:pointer;">🎙️</button>
+      <span style="color:rgba(255,255,255,.5);font-size:11px;font-family:'Calibri',sans-serif;">Mute</span>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+      <button id="call-cam-btn" style="width:54px;height:54px;border-radius:50%;background:rgba(255,255,255,.15);border:none;font-size:22px;cursor:pointer;">📷</button>
+      <span style="color:rgba(255,255,255,.5);font-size:11px;font-family:'Calibri',sans-serif;">Camera</span>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+      <button id="call-minimise-btn" style="width:54px;height:54px;border-radius:50%;background:rgba(255,255,255,.15);border:none;font-size:22px;cursor:pointer;">⬇️</button>
+      <span style="color:rgba(255,255,255,.5);font-size:11px;font-family:'Calibri',sans-serif;">Minimise</span>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+      <button id="call-speaker-btn" style="width:54px;height:54px;border-radius:50%;background:rgba(255,255,255,.15);border:none;font-size:22px;cursor:pointer;">🔊</button>
+      <span style="color:rgba(255,255,255,.5);font-size:11px;font-family:'Calibri',sans-serif;">Speaker</span>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+      <button id="call-end-btn" style="width:54px;height:54px;border-radius:50%;background:#ea3943;border:none;font-size:22px;cursor:pointer;box-shadow:0 4px 16px rgba(234,57,67,.5);">📵</button>
+      <span style="color:rgba(255,255,255,.5);font-size:11px;font-family:'Calibri',sans-serif;">End</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- Mini call bar -->
+<div id="mini-call-bar" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:1500;background:linear-gradient(90deg,#1a3a2a,#217346);padding:8px 16px;align-items:center;gap:12px;box-shadow:0 -2px 12px rgba(0,0,0,.3);">
+  <span id="mini-call-icon" style="font-size:18px;">📞</span>
+  <div style="flex:1;">
+    <div id="mini-call-name" style="color:#fff;font-size:13px;font-weight:600;font-family:'Calibri',sans-serif;"></div>
+    <div id="mini-call-timer-bar" style="color:rgba(255,255,255,.7);font-size:11px;font-family:'Calibri',monospace;">0:00</div>
+  </div>
+  <button id="mini-call-maximise" style="background:rgba(255,255,255,.15);border:none;color:#fff;font-size:13px;padding:6px 14px;border-radius:20px;cursor:pointer;font-family:'Calibri',sans-serif;">⬆️ Return</button>
+  <button id="mini-call-end"      style="background:#ea3943;border:none;color:#fff;font-size:13px;padding:6px 14px;border-radius:20px;cursor:pointer;font-family:'Calibri',sans-serif;">📵 End</button>
+</div>
+
+<!-- Image lightbox -->
+<div id="img-lightbox">
+  <button id="img-lightbox-close">✕</button>
+  <img id="img-lightbox-img" src="" alt=""/>
+</div>
+
+<!-- ── CALL OVERLAY ── -->
 <div id="call-overlay" style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(10,20,30,.97);flex-direction:column;align-items:center;justify-content:center;gap:0;">
 
   <!-- Remote video (full background) -->
@@ -1401,194 +1478,37 @@ document.addEventListener("visibilitychange", () => {
   else { _unshieldRecents(); document.title = BASE_TITLE; }
 });
 
-// ── WebRTC Calling Engine ─────────────────────────────────────────────────────
+// ── Calling Engine (Daily.co iframe) ─────────────────────────────────────────
 const callEl = id => document.getElementById(id);
 
-// Call state
-let pc             = null;
-let localStream    = null;
-let callType       = null;
-let callState      = "idle";
-let callMinimised  = false;
-let micMuted       = false;
-let camOff         = false;
-let pendingOffer   = null;
+let callType      = null;
+let callState     = "idle";
+let callMinimised = false;
+let callPollTimer = null;
 let callStartEpoch = 0;
 let callStartedAt  = null;
-
-const ICE_SERVERS = { iceServers: [
-  { urls: "stun:stun.l.google.com:19302" },
-  { urls: "stun:stun1.l.google.com:19302" },
-  { urls: "turn:openrelay.metered.ca:80",
-    username: "openrelayproject", credential: "openrelayproject" },
-  { urls: "turn:openrelay.metered.ca:443",
-    username: "openrelayproject", credential: "openrelayproject" },
-  { urls: "turn:openrelay.metered.ca:443?transport=tcp",
-    username: "openrelayproject", credential: "openrelayproject" },
-]};
-
-function createPC() {
-  if (pc) { try { pc.close(); } catch(e) {} pc = null; }
-  pc = new RTCPeerConnection(ICE_SERVERS);
-
-  const remoteStream = new MediaStream();
-  const rv = callEl("remote-video");
-  rv.srcObject = remoteStream;
-  rv.style.opacity = "0";
-
-  pc.ontrack = e => {
-    remoteStream.addTrack(e.track);
-    if (e.track.kind === "video") rv.style.opacity = "1";
-    rv.play().catch(() => {});
-  };
-
-  // NO trickle ICE - all candidates bundled in SDP
-  pc.onicecandidate = () => {};
-
-  pc.oniceconnectionstatechange = () => {
-    if (!pc) return;
-    const s = pc.iceConnectionState;
-    const st = callEl("call-status");
-    if (s === "checking" && st) st.textContent = "Connecting…";
-    if (s === "connected" || s === "completed") {
-      if (st) st.textContent = "Connected";
-      rv.play().catch(() => {});
-    }
-    if (s === "failed") {
-      if (st) st.textContent = "⚠ Connection failed";
-      setTimeout(() => endCall(true), 3000);
-    }
-  };
-
-  pc.onconnectionstatechange = () => {
-    if (!pc) return;
-    if (pc.connectionState === "connected") rv.play().catch(() => {});
-    if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
-      const dur = callStartEpoch ? Math.round((Date.now()-callStartEpoch)/1000) : 0;
-      logCall("completed", dur); endCall(false);
-    }
-  };
-
-  return pc;
-}
-
-// Wait for ICE gathering to finish (max 6s for TURN)
-function gatherICE(peerConn) {
-  return new Promise(resolve => {
-    if (peerConn.iceGatheringState === "complete") { resolve(); return; }
-    peerConn.addEventListener("icegatheringstatechange", function handler() {
-      if (peerConn.iceGatheringState === "complete") {
-        peerConn.removeEventListener("icegatheringstatechange", handler);
-        resolve();
-      }
-    });
-    setTimeout(resolve, 6000);
-  });
-}
-
-// ── Signal send/poll ──────────────────────────────────────────────────────────
-async function sendSignal(type, payload) {
-  await api("/api/call/signal", {
-    method: "POST",
-    body: JSON.stringify({ type, payload: JSON.stringify(payload) })
-  }).catch(() => {});
-}
-
-// Fast poll during call (800ms), slow when idle (via startPolling)
-let callPollTimer = null;
-function startCallPoll(fast = false) {
-  stopCallPoll();
-  callPollTimer = setInterval(pollSignals, fast ? 800 : 1000);
-}
-function stopCallPoll() {
-  if (callPollTimer) { clearInterval(callPollTimer); callPollTimer = null; }
-}
-
-async function pollSignals() {
-  const sigs = await api("/api/call/poll").catch(() => []);
-  if (!Array.isArray(sigs)) return;
-  for (const s of sigs) {
-    const p = s.payload ? JSON.parse(s.payload) : {};
-    await handleSignal(s.type, p);
-  }
-}
-
-// ── Signal handler ────────────────────────────────────────────────────────────
-async function handleSignal(type, payload) {
-  const otherName = callEl("other-name").textContent || "them";
-
-  if (type === "ring") {
-    if (callState !== "idle") { await sendSignal("busy", {}); return; }
-    callState      = "incoming";
-    callType       = payload.callType || "audio";
-    callStartedAt  = new Date().toLocaleString("en-IN", {timeZone:"Asia/Kolkata"});
-    callStartEpoch = 0;
-    pendingOffer   = payload;  // {callType, sdp, type}
-    callEl("incoming-name").textContent = otherName;
-    callEl("incoming-type").textContent = callType === "video" ? "📹 Video Call" : "📞 Audio Call";
-    showCallOverlay("incoming");
-    callEl("incoming-panel").style.display    = "flex";
-    callEl("call-status-panel").style.display = "none";
-    playRingtone();
-    return;
-  }
-
-  if (type === "answer") {
-    if (callState !== "outgoing" || !pc) return;
-    stopRingtone();
-    // payload is {sdp, type} — reconstruct RTCSessionDescription
-    await pc.setRemoteDescription({ type: payload.type || "answer", sdp: payload.sdp || payload });
-    callState      = "active";
-    callStartEpoch = Date.now();
-    callEl("call-status").textContent = "Connected";
-    showCallOverlay("active");
-    startCallTimer();
-    return;
-  }
-
-  // ICE not used (bundled in SDP) — ignore stale ice signals
-  if (type === "ice") return;
-
-  if (type === "hangup" || type === "reject" || type === "busy") {
-    const prevState = callState;
-    const dur = (prevState === "active" && callStartEpoch)
-                ? Math.round((Date.now()-callStartEpoch)/1000) : 0;
-    const status = prevState === "active" ? "completed"
-                 : type === "reject" ? "rejected"
-                 : type === "busy"   ? "busy" : "missed";
-    if (prevState !== "idle") logCall(status, dur);
-    endCall(false);
-    const msg = type === "busy" ? "User is busy"
-              : type === "reject" ? "Call declined" : "Call ended";
-    callEl("call-status").textContent = msg;
-    callEl("call-status-panel").style.display = "flex";
-    callEl("call-overlay").style.display = "flex";
-    setTimeout(hideCallOverlay, 2000);
-    return;
-  }
-}
+let ringtoneTimer  = null;
+let pendingRoomUrl = null;  // stored when incoming ring arrives
 
 // ── Ringtone ──────────────────────────────────────────────────────────────────
-let ringtoneTimer = null;
 function playRingtone() {
   stopRingtone();
   if (!audioCtx) {
     try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) { return; }
   }
-  const ctx = audioCtx;
-  if (ctx.state === "suspended") ctx.resume();
+  if (audioCtx.state === "suspended") audioCtx.resume();
   let tick = 0;
   function ring() {
     try {
-      const osc = ctx.createOscillator();
-      const g   = ctx.createGain();
-      osc.connect(g); g.connect(ctx.destination);
+      const osc = audioCtx.createOscillator();
+      const g   = audioCtx.createGain();
+      osc.connect(g); g.connect(audioCtx.destination);
       osc.frequency.value = tick % 2 === 0 ? 880 : 660;
-      g.gain.setValueAtTime(0, ctx.currentTime);
-      g.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.06);
-      g.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.4);
-      osc.start(ctx.currentTime);
-      osc.stop(ctx.currentTime + 0.42);
+      g.gain.setValueAtTime(0, audioCtx.currentTime);
+      g.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + 0.06);
+      g.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.4);
+      osc.start(audioCtx.currentTime);
+      osc.stop(audioCtx.currentTime + 0.42);
       tick++;
     } catch(e) {}
   }
@@ -1599,7 +1519,7 @@ function stopRingtone() {
   if (ringtoneTimer) { clearInterval(ringtoneTimer); ringtoneTimer = null; }
 }
 
-// ── Timer ─────────────────────────────────────────────────────────────────────
+// ── Call timer ─────────────────────────────────────────────────────────────────
 let callTimerInt = null;
 let callSeconds  = 0;
 function startCallTimer() {
@@ -1618,7 +1538,32 @@ function stopCallTimer() {
   if (callTimerInt) { clearInterval(callTimerInt); callTimerInt = null; }
 }
 
-// ── Overlay ───────────────────────────────────────────────────────────────────
+// ── Signal send/poll ──────────────────────────────────────────────────────────
+async function sendSignal(type, payload) {
+  await api("/api/call/signal", {
+    method: "POST",
+    body: JSON.stringify({ type, payload: JSON.stringify(payload || {}) })
+  }).catch(() => {});
+}
+
+function startCallPoll(fast) {
+  stopCallPoll();
+  callPollTimer = setInterval(pollSignals, fast ? 800 : 1000);
+}
+function stopCallPoll() {
+  if (callPollTimer) { clearInterval(callPollTimer); callPollTimer = null; }
+}
+
+async function pollSignals() {
+  const sigs = await api("/api/call/poll").catch(() => []);
+  if (!Array.isArray(sigs)) return;
+  for (const s of sigs) {
+    const p = s.payload ? JSON.parse(s.payload) : {};
+    await handleSignal(s.type, p);
+  }
+}
+
+// ── Overlay helpers ───────────────────────────────────────────────────────────
 function showCallOverlay(mode) {
   callEl("call-overlay").style.display      = "flex";
   callEl("call-status-panel").style.display = mode !== "incoming" ? "flex" : "none";
@@ -1626,18 +1571,16 @@ function showCallOverlay(mode) {
   callEl("call-controls").style.display     = mode === "active"    ? "flex" : "none";
   callEl("call-timer").style.display        = mode === "active"    ? "block" : "none";
   callEl("call-cancel-wrap").style.display  = mode === "outgoing"  ? "flex" : "none";
-  if (mode !== "active") {
-    callEl("remote-video").style.opacity = "0";
-    callEl("local-video").style.display  = "none";
-  }
 }
 function hideCallOverlay() {
   callEl("call-overlay").style.display  = "none";
   callEl("mini-call-bar").style.display = "none";
-  callEl("remote-video").style.opacity  = "0";
-  callEl("local-video").style.display   = "none";
+  // Remove Daily iframe if present
+  const frame = document.getElementById("daily-iframe");
+  if (frame) frame.remove();
   callMinimised = false;
-  stopRingtone(); stopCallTimer();
+  stopRingtone();
+  stopCallTimer();
 }
 function minimiseCall() {
   callMinimised = true;
@@ -1650,10 +1593,26 @@ function maximiseCall() {
   callMinimised = false;
   callEl("mini-call-bar").style.display = "none";
   callEl("call-overlay").style.display  = "flex";
-  showCallOverlay("active");
 }
 
-// ── Start call (caller side) ──────────────────────────────────────────────────
+// ── Daily iframe ──────────────────────────────────────────────────────────────
+function launchDailyFrame(roomUrl, displayName) {
+  // Remove any existing frame
+  const old = document.getElementById("daily-iframe");
+  if (old) old.remove();
+
+  const frame = document.createElement("iframe");
+  frame.id  = "daily-iframe";
+  frame.src = `${roomUrl}?userName=${encodeURIComponent(displayName)}&showLeaveButton=false&showFullscreenButton=false`;
+  frame.allow = "camera; microphone; autoplay; display-capture; fullscreen";
+  frame.style.cssText = [
+    "position:absolute", "inset:0", "width:100%", "height:100%",
+    "border:none", "border-radius:0", "z-index:1", "background:#000"
+  ].join(";");
+  callEl("call-overlay").appendChild(frame);
+}
+
+// ── Start call (caller) ───────────────────────────────────────────────────────
 async function startCall(type) {
   if (callState !== "idle") return;
   callType       = type;
@@ -1662,107 +1621,119 @@ async function startCall(type) {
   callStartEpoch = 0;
   const otherName = callEl("other-name").textContent || "them";
   callEl("call-name").textContent   = otherName;
-  callEl("call-status").textContent = type === "video" ? "📹 Calling…" : "📞 Calling…";
+  callEl("call-status").textContent = "Creating room…";
   showCallOverlay("outgoing");
   playRingtone();
   startCallPoll(true);
 
-  try {
-    localStream = await navigator.mediaDevices.getUserMedia(
-      type === "video"
-        ? { audio: true, video: { facingMode: "user", width:{ideal:640}, height:{ideal:480} } }
-        : { audio: true, video: false }
-    );
-  } catch(e) {
-    callEl("call-status").textContent = "⚠ Camera/mic access denied";
-    setTimeout(() => endCall(false), 2500); return;
+  // Get/create Daily room
+  const result = await api("/api/call/room", {method:"POST"}).catch(() => null);
+  if (!result || !result.ok) {
+    callEl("call-status").textContent = result?.error || "⚠ Could not create room. Set DAILY_API_KEY.";
+    setTimeout(() => endCall(false), 4000); return;
   }
 
-  if (type === "video") {
-    const lv = callEl("local-video");
-    lv.srcObject = localStream; lv.style.display = "block";
-    lv.play().catch(() => {});
-  }
-
-  createPC();
-  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-  // Wait for ALL ICE candidates (including TURN relays) before sending
-  callEl("call-status").textContent = type === "video" ? "📹 Gathering network info…" : "📞 Gathering network info…";
-  await gatherICE(pc);
+  const roomUrl = result.url;
   callEl("call-status").textContent = type === "video" ? "📹 Calling…" : "📞 Calling…";
-  // Send complete SDP with all candidates embedded
-  await sendSignal("ring", { callType: type, sdp: pc.localDescription.sdp, type: pc.localDescription.type });
+
+  // Signal other user with room URL
+  await sendSignal("ring", { callType: type, roomUrl });
+
+  // Launch Daily iframe for caller
+  launchDailyFrame(roomUrl, myUsername || "Me");
 }
 
-// ── Accept call (callee side) ─────────────────────────────────────────────────
+// ── Accept call (callee) ──────────────────────────────────────────────────────
 async function acceptCall() {
-  if (callState !== "incoming" || !pendingOffer) return;
+  if (callState !== "incoming" || !pendingRoomUrl) return;
   stopRingtone();
   const otherName = callEl("other-name").textContent || "them";
-
-  try {
-    localStream = await navigator.mediaDevices.getUserMedia(
-      callType === "video"
-        ? { audio: true, video: { facingMode: "user", width:{ideal:640}, height:{ideal:480} } }
-        : { audio: true, video: false }
-    );
-  } catch(e) {
-    callEl("call-status").textContent = "⚠ Camera/mic access denied";
-    callEl("call-status-panel").style.display = "flex";
-    callEl("incoming-panel").style.display = "none";
-    setTimeout(() => endCall(false), 2500); return;
-  }
-
-  if (callType === "video") {
-    const lv = callEl("local-video");
-    lv.srcObject = localStream; lv.style.display = "block";
-    lv.play().catch(() => {});
-  }
-
-  createPC();
-  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-
-  // Set remote description from stored offer
-  await pc.setRemoteDescription({
-    type: pendingOffer.type || "offer",
-    sdp:  pendingOffer.sdp  || pendingOffer
-  });
-  const answer = await pc.createAnswer();
-  await pc.setLocalDescription(answer);
-  // Wait for ALL ICE candidates before sending answer
-  await gatherICE(pc);
-  await sendSignal("answer", { sdp: pc.localDescription.sdp, type: pc.localDescription.type });
-
-  pendingOffer   = null;
-  callState      = "active";
-  callStartedAt  = callStartedAt || new Date().toLocaleString("en-IN", {timeZone:"Asia/Kolkata"});
-  callStartEpoch = Date.now();
+  const roomUrl   = pendingRoomUrl;
+  pendingRoomUrl  = null;
+  callState       = "active";
+  callStartedAt   = callStartedAt || new Date().toLocaleString("en-IN", {timeZone:"Asia/Kolkata"});
+  callStartEpoch  = Date.now();
   callEl("call-name").textContent   = otherName;
-  callEl("call-status").textContent = "Connected";
+  callEl("call-status").textContent = "Connecting…";
   showCallOverlay("active");
   startCallTimer();
+
+  // Signal caller we answered
+  await sendSignal("answer", { accepted: true });
+
+  // Launch Daily iframe for callee
+  launchDailyFrame(roomUrl, myUsername || "Me");
 }
 
-// ── Reject / End ──────────────────────────────────────────────────────────────
+// ── Reject call ───────────────────────────────────────────────────────────────
 function rejectCall() {
-  logCall("rejected", 0); sendSignal("reject", {}); endCall(false);
+  logCall("rejected", 0);
+  sendSignal("reject", {});
+  endCall(false);
 }
 
-function endCall(sendHangup = true) {
+// ── End call ──────────────────────────────────────────────────────────────────
+function endCall(sendHangup) {
   if (sendHangup && callState !== "idle") sendSignal("hangup", {});
-  callState = "idle"; pendingOffer = null;
-  stopRingtone(); stopCallPoll(); stopCallTimer();
-  if (pc)          { try { pc.close(); } catch(e) {} pc = null; }
-  if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
-  const rv = callEl("remote-video");
-  if (rv) { try { rv.srcObject = null; } catch(e) {} rv.style.opacity = "0"; }
-  const lv = callEl("local-video");
-  if (lv) { try { lv.srcObject = null; } catch(e) {} lv.style.display = "none"; }
-  micMuted = false; camOff = false;
+  callState      = "idle";
+  pendingRoomUrl = null;
+  stopRingtone();
+  stopCallPoll();
+  stopCallTimer();
   callStartEpoch = 0; callStartedAt = null;
   hideCallOverlay();
+}
+
+// ── Handle incoming signals ───────────────────────────────────────────────────
+async function handleSignal(type, payload) {
+  const otherName = callEl("other-name").textContent || "them";
+
+  if (type === "ring") {
+    if (callState !== "idle") { await sendSignal("busy", {}); return; }
+    callState      = "incoming";
+    callType       = payload.callType || "audio";
+    callStartedAt  = new Date().toLocaleString("en-IN", {timeZone:"Asia/Kolkata"});
+    callStartEpoch = 0;
+    pendingRoomUrl = payload.roomUrl;
+    callEl("incoming-name").textContent = otherName;
+    callEl("incoming-type").textContent = callType === "video" ? "📹 Video Call" : "📞 Audio Call";
+    showCallOverlay("incoming");
+    callEl("incoming-panel").style.display    = "flex";
+    callEl("call-status-panel").style.display = "none";
+    playRingtone();
+    return;
+  }
+
+  if (type === "answer") {
+    if (callState !== "outgoing") return;
+    stopRingtone();
+    callState      = "active";
+    callStartEpoch = Date.now();
+    callEl("call-status").textContent = "Connected";
+    showCallOverlay("active");
+    startCallTimer();
+    return;
+  }
+
+  if (type === "hangup" || type === "reject" || type === "busy") {
+    const prevState = callState;
+    const dur = (prevState === "active" && callStartEpoch)
+                ? Math.round((Date.now()-callStartEpoch)/1000) : 0;
+    const status = prevState === "active" ? "completed"
+                 : type === "reject" ? "rejected"
+                 : type === "busy"   ? "busy" : "missed";
+    if (prevState !== "idle") logCall(status, dur);
+    endCall(false);
+    if (prevState !== "idle") {
+      const msg = type === "busy" ? "User is busy"
+                : type === "reject" ? "Call declined" : "Call ended";
+      callEl("call-status").textContent = msg;
+      callEl("call-status-panel").style.display = "flex";
+      callEl("call-overlay").style.display = "flex";
+      setTimeout(hideCallOverlay, 2000);
+    }
+    return;
+  }
 }
 
 // ── Button wiring ─────────────────────────────────────────────────────────────
@@ -1789,29 +1760,10 @@ callEl("mini-call-end").addEventListener("click", () => {
   const dur = callStartEpoch ? Math.round((Date.now()-callStartEpoch)/1000) : 0;
   logCall("completed", dur); endCall(false);
 });
-callEl("call-mute-btn").addEventListener("click", () => {
-  if (!localStream) return;
-  micMuted = !micMuted;
-  localStream.getAudioTracks().forEach(t => t.enabled = !micMuted);
-  callEl("call-mute-btn").textContent = micMuted ? "🔇" : "🎙️";
-  callEl("call-mute-btn").style.background = micMuted ? "rgba(234,57,67,.5)" : "rgba(255,255,255,.15)";
-});
-callEl("call-cam-btn").addEventListener("click", () => {
-  if (!localStream) return;
-  const vt = localStream.getVideoTracks();
-  if (!vt.length) return;
-  camOff = !camOff;
-  vt.forEach(t => t.enabled = !camOff);
-  callEl("call-cam-btn").textContent = camOff ? "🚫" : "📷";
-  callEl("call-cam-btn").style.background = camOff ? "rgba(234,57,67,.5)" : "rgba(255,255,255,.15)";
-  callEl("local-video").style.opacity = camOff ? "0.3" : "1";
-});
-callEl("call-speaker-btn").addEventListener("click", () => {
-  const rv = callEl("remote-video");
-  if (!rv) return;
-  rv.muted = !rv.muted;
-  callEl("call-speaker-btn").textContent = rv.muted ? "🔇" : "🔊";
-  callEl("call-speaker-btn").style.background = rv.muted ? "rgba(234,57,67,.5)" : "rgba(255,255,255,.15)";
+// Mute/cam/speaker buttons hidden for Daily (Daily has its own controls)
+["call-mute-btn","call-cam-btn","call-speaker-btn"].forEach(id => {
+  const el = callEl(id);
+  if (el) el.style.display = "none";
 });
 
 // ── Call logging ───────────────────────────────────────────────────────────────

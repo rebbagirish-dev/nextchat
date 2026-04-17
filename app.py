@@ -444,25 +444,76 @@ def api_call_history_clear():
     qexec("DELETE FROM call_history")
     return jsonify({"ok": True})
 
+@app.route("/api/call/room", methods=["POST"])
+def api_call_room():
+    """Create or retrieve a Daily.co room for the two users.
+    Requires DAILY_API_KEY env var. Returns {ok, url, room_name}."""
+    user, err = require_auth()
+    if err: return err
+    import urllib.request, urllib.error, json as _json
+
+    daily_key = os.environ.get("DAILY_API_KEY", "")
+    if not daily_key:
+        return jsonify({"ok": False, "error": "DAILY_API_KEY not configured"}), 500
+
+    # Stable room name for these two users (same room every time)
+    room_name = "nexchat-private-room"
+    room_url  = f"https://api.daily.co/v1/rooms/{room_name}"
+    headers   = {"Authorization": f"Bearer {daily_key}",
+                 "Content-Type": "application/json"}
+
+    # Try to get existing room first
+    try:
+        req = urllib.request.Request(room_url, headers=headers)
+        with urllib.request.urlopen(req) as resp:
+            data = _json.loads(resp.read())
+            return jsonify({"ok": True, "url": data["url"], "room_name": room_name})
+    except urllib.error.HTTPError as e:
+        if e.code != 404:
+            return jsonify({"ok": False, "error": f"Daily API error: {e.code}"}), 500
+
+    # Room doesn't exist — create it
+    body = _json.dumps({
+        "name": room_name,
+        "privacy": "private",
+        "properties": {
+            "enable_chat": False,
+            "enable_screenshare": False,
+            "enable_knocking": False,
+            "start_video_off": False,
+            "start_audio_off": False,
+            "exp": int((datetime.datetime.utcnow() + datetime.timedelta(hours=24)).timestamp())
+        }
+    }).encode()
+    try:
+        req = urllib.request.Request(
+            "https://api.daily.co/v1/rooms",
+            data=body, headers=headers, method="POST"
+        )
+        with urllib.request.urlopen(req) as resp:
+            data = _json.loads(resp.read())
+            return jsonify({"ok": True, "url": data["url"], "room_name": room_name})
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode()
+        return jsonify({"ok": False, "error": f"Could not create room: {err_body}"}), 500
+
+# Keep signal/poll routes for notify-only (ring/hangup signaling)
 @app.route("/api/call/signal", methods=["POST"])
 def api_call_signal():
     user, err = require_auth()
     if err: return err
-    data    = request.get_json(force=True, silent=True) or {}
-    sig_type = data.get("type", "")       # offer | answer | ice | hangup | ring
-    payload  = data.get("payload", "")
-    if not sig_type:
-        return jsonify({"ok": False})
+    data     = request.get_json(force=True, silent=True) or {}
+    sig_type = data.get("type", "")
+    payload  = data.get("payload", "{}")
+    if not sig_type: return jsonify({"ok": False})
     my_id = user["id"]
     p     = ph()
     other = qfetchone(f"SELECT id FROM users WHERE id != {p}", (my_id,))
-    if not other:
-        return jsonify({"ok": False})
-    # Clean up old signals older than 30s to avoid stale signals
-    qexec(f"DELETE FROM signaling WHERE from_id={p} AND to_id={p} AND created_at < {p}",
-          (my_id, other["id"],
-           (datetime.datetime.utcnow() - datetime.timedelta(seconds=30)).strftime("%Y-%m-%d %H:%M:%S")))
-    qexec(f"INSERT INTO signaling (from_id, to_id, type, payload, created_at) VALUES ({phs(5)})",
+    if not other: return jsonify({"ok": False})
+    # Clean stale signals
+    qexec(f"DELETE FROM signaling WHERE created_at < {p}",
+          ((datetime.datetime.utcnow() - datetime.timedelta(seconds=60)).strftime("%Y-%m-%d %H:%M:%S"),))
+    qexec(f"INSERT INTO signaling (from_id,to_id,type,payload,created_at) VALUES ({phs(5)})",
           (my_id, other["id"], sig_type, payload, now_dt()))
     return jsonify({"ok": True})
 
@@ -472,14 +523,10 @@ def api_call_poll():
     if err: return jsonify([])
     my_id = user["id"]
     p     = ph()
-    rows  = qfetch(
-        f"SELECT id, from_id, type, payload FROM signaling WHERE to_id={p} ORDER BY id ASC",
-        (my_id,)
-    )
+    rows  = qfetch(f"SELECT id,from_id,type,payload FROM signaling WHERE to_id={p} ORDER BY id ASC", (my_id,))
     if rows:
         ids = [r["id"] for r in rows]
-        placeholders = phs(len(ids))
-        qexec(f"DELETE FROM signaling WHERE id IN ({placeholders})", tuple(ids))
+        qexec(f"DELETE FROM signaling WHERE id IN ({phs(len(ids))})", tuple(ids))
     return jsonify(rows)
 
 @app.route("/api/logout-beacon", methods=["POST"])
