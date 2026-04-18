@@ -1576,7 +1576,7 @@ function hideCallOverlay() {
   callEl("call-overlay").style.display  = "none";
   callEl("mini-call-bar").style.display = "none";
   // Remove Daily iframe if present
-  const frame = document.getElementById("daily-iframe");
+  const frame = document.getElementById("whereby-iframe");
   if (frame) frame.remove();
   callMinimised = false;
   stopRingtone();
@@ -1595,20 +1595,31 @@ function maximiseCall() {
   callEl("call-overlay").style.display  = "flex";
 }
 
-// ── Daily iframe ──────────────────────────────────────────────────────────────
-function launchDailyFrame(roomUrl, displayName) {
-  // Remove any existing frame
-  const old = document.getElementById("daily-iframe");
+// ── Whereby iframe ────────────────────────────────────────────────────────────
+function launchWherebyFrame(roomUrl) {
+  const old = document.getElementById("whereby-iframe");
   if (old) old.remove();
 
+  // Whereby embed params: minimal UI, no branding, no chat (we have our own)
+  const params = new URLSearchParams({
+    embed:          "",
+    background:     "off",
+    chat:           "off",
+    people:         "off",
+    screenshare:    "off",
+    displayName:    myUsername || "User",
+    lang:           "en"
+  });
+
   const frame = document.createElement("iframe");
-  frame.id  = "daily-iframe";
-  frame.src = `${roomUrl}?userName=${encodeURIComponent(displayName)}&showLeaveButton=false&showFullscreenButton=false`;
+  frame.id    = "whereby-iframe";
+  frame.src   = `${roomUrl}?${params.toString()}`;
   frame.allow = "camera; microphone; autoplay; display-capture; fullscreen";
   frame.style.cssText = [
     "position:absolute", "inset:0", "width:100%", "height:100%",
-    "border:none", "border-radius:0", "z-index:1", "background:#000"
+    "border:none", "z-index:1", "background:#000", "border-radius:0"
   ].join(";");
+  frame.setAttribute("allowfullscreen", "");
   callEl("call-overlay").appendChild(frame);
 }
 
@@ -1629,18 +1640,19 @@ async function startCall(type) {
   // Get/create Daily room
   const result = await api("/api/call/room", {method:"POST"}).catch(() => null);
   if (!result || !result.ok) {
-    callEl("call-status").textContent = result?.error || "⚠ Could not create room. Set DAILY_API_KEY.";
-    setTimeout(() => endCall(false), 4000); return;
+    callEl("call-status").textContent = result?.error || "⚠ Could not create room";
+    setTimeout(() => endCall(false), 6000); return;
   }
 
-  const roomUrl = result.url;
+  const roomUrl    = result.url;
+  const hostUrl    = result.host_url || result.url;
   callEl("call-status").textContent = type === "video" ? "📹 Calling…" : "📞 Calling…";
 
-  // Signal other user with room URL
+  // Signal other user with regular room URL
   await sendSignal("ring", { callType: type, roomUrl });
 
-  // Launch Daily iframe for caller
-  launchDailyFrame(roomUrl, myUsername || "Me");
+  // Caller joins as host
+  launchWherebyFrame(hostUrl);
 }
 
 // ── Accept call (callee) ──────────────────────────────────────────────────────
@@ -1662,7 +1674,7 @@ async function acceptCall() {
   await sendSignal("answer", { accepted: true });
 
   // Launch Daily iframe for callee
-  launchDailyFrame(roomUrl, myUsername || "Me");
+  launchWherebyFrame(roomUrl);
 }
 
 // ── Reject call ───────────────────────────────────────────────────────────────

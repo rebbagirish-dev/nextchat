@@ -446,56 +446,45 @@ def api_call_history_clear():
 
 @app.route("/api/call/room", methods=["POST"])
 def api_call_room():
-    """Create or retrieve a Daily.co room for the two users.
-    Requires DAILY_API_KEY env var. Returns {ok, url, room_name}."""
+    """Create a Whereby meeting room. Requires WHEREBY_API_KEY env var."""
     user, err = require_auth()
     if err: return err
     import urllib.request, urllib.error, json as _json
 
-    daily_key = os.environ.get("DAILY_API_KEY", "")
-    if not daily_key:
-        return jsonify({"ok": False, "error": "DAILY_API_KEY not configured"}), 500
+    api_key = os.environ.get("WHEREBY_API_KEY", "").strip()
+    if not api_key:
+        env_keys = [k for k in os.environ.keys() if "WHEREBY" in k.upper() or "API" in k.upper()]
+        return jsonify({"ok": False,
+                        "error": f"WHEREBY_API_KEY not set. Detected API env vars: {env_keys}"}), 500
 
-    # Stable room name for these two users (same room every time)
-    room_name = "nexchat-private-room"
-    room_url  = f"https://api.daily.co/v1/rooms/{room_name}"
-    headers   = {"Authorization": f"Bearer {daily_key}",
-                 "Content-Type": "application/json"}
-
-    # Try to get existing room first
-    try:
-        req = urllib.request.Request(room_url, headers=headers)
-        with urllib.request.urlopen(req) as resp:
-            data = _json.loads(resp.read())
-            return jsonify({"ok": True, "url": data["url"], "room_name": room_name})
-    except urllib.error.HTTPError as e:
-        if e.code != 404:
-            return jsonify({"ok": False, "error": f"Daily API error: {e.code}"}), 500
-
-    # Room doesn't exist — create it
+    end_date = (datetime.datetime.utcnow() +
+                datetime.timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
     body = _json.dumps({
-        "name": room_name,
-        "privacy": "private",
-        "properties": {
-            "enable_chat": False,
-            "enable_screenshare": False,
-            "enable_knocking": False,
-            "start_video_off": False,
-            "start_audio_off": False,
-            "exp": int((datetime.datetime.utcnow() + datetime.timedelta(hours=24)).timestamp())
-        }
+        "endDate": end_date,
+        "roomMode": "normal",
+        "fields": ["hostRoomUrl"]
     }).encode()
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
     try:
         req = urllib.request.Request(
-            "https://api.daily.co/v1/rooms",
+            "https://api.whereby.dev/v1/meetings",
             data=body, headers=headers, method="POST"
         )
-        with urllib.request.urlopen(req) as resp:
+        with urllib.request.urlopen(req, timeout=10) as resp:
             data = _json.loads(resp.read())
-            return jsonify({"ok": True, "url": data["url"], "room_name": room_name})
+            return jsonify({
+                "ok": True,
+                "url":      data.get("roomUrl"),
+                "host_url": data.get("hostRoomUrl", data.get("roomUrl"))
+            })
     except urllib.error.HTTPError as e:
         err_body = e.read().decode()
-        return jsonify({"ok": False, "error": f"Could not create room: {err_body}"}), 500
+        return jsonify({"ok": False, "error": f"Whereby error {e.code}: {err_body}"}), 500
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Request failed: {str(e)}"}), 500
 
 # Keep signal/poll routes for notify-only (ring/hangup signaling)
 @app.route("/api/call/signal", methods=["POST"])
