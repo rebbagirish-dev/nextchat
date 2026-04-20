@@ -294,8 +294,9 @@ def logout():
     user, _ = require_auth()
     if user:
         p = ph()
-        # Delete only read messages — unread (sent/delivered) are preserved
+        # Delete read messages and any stale call signals
         qexec(f"DELETE FROM messages WHERE status='read'")
+        qexec(f"DELETE FROM signaling WHERE from_id={p} OR to_id={p}", (user["id"], user["id"]))
         qexec(f"UPDATE users SET token=NULL, online=0, typing=0, last_active=NULL, last_seen={p} WHERE id={p}",
               (now_ts_full(), user["id"]))
     return jsonify({"ok": True})
@@ -492,6 +493,14 @@ def api_call_room():
         return jsonify({"ok": False, "error": f"Request failed: {str(e)}"}), 500
 
 # Keep signal/poll routes for notify-only (ring/hangup signaling)
+@app.route("/api/call/clear", methods=["POST"])
+def api_call_clear():
+    """Wipe all pending call signals for both users — called on call end."""
+    user, err = require_auth()
+    if err: return err
+    qexec("DELETE FROM signaling")
+    return jsonify({"ok": True})
+
 @app.route("/api/call/signal", methods=["POST"])
 def api_call_signal():
     user, err = require_auth()

@@ -1603,26 +1603,31 @@ function launchWherebyFrame(roomUrl) {
   const old = document.getElementById("whereby-iframe");
   if (old) old.remove();
 
-  // Whereby embed params: minimal UI, no branding, no chat (we have our own)
-  const params = new URLSearchParams({
-    embed:          "",
-    background:     "off",
-    chat:           "off",
-    people:         "off",
-    screenshare:    "off",
-    displayName:    myUsername || "User",
-    lang:           "en"
-  });
+  // Whereby embed params
+  // NOTE: Do NOT set audio=off or video=off — let Whereby handle defaults
+  // Use minimal params to avoid overriding Whereby's own audio setup
+  const base = roomUrl.includes("?") ? roomUrl + "&" : roomUrl + "?";
+  const src  = base + [
+    "embed",
+    `displayName=${encodeURIComponent(myUsername || "User")}`,
+    "background=off",
+    "chat=off",
+    "people=off",
+    "screenshare=off",
+    "lang=en"
+  ].join("&");
 
   const frame = document.createElement("iframe");
   frame.id    = "whereby-iframe";
-  frame.src   = `${roomUrl}?${params.toString()}`;
-  frame.allow = "camera; microphone; autoplay; display-capture; fullscreen";
+  frame.src   = src;
+  // Full permissions including speaker output
+  frame.allow = "camera *; microphone *; autoplay *; display-capture *; fullscreen *; speaker *";
+  frame.setAttribute("allowfullscreen", "true");
+  frame.setAttribute("allowusermedia", "true");
   frame.style.cssText = [
     "position:absolute", "inset:0", "width:100%", "height:100%",
-    "border:none", "z-index:1", "background:#000", "border-radius:0"
+    "border:none", "z-index:1", "background:#1a1a1a", "border-radius:0"
   ].join(";");
-  frame.setAttribute("allowfullscreen", "");
   callEl("call-overlay").appendChild(frame);
 }
 
@@ -1710,6 +1715,9 @@ function endCall(sendHangup) {
   stopCallTimer();
   callStartEpoch = 0; callStartedAt = null;
   hideCallOverlay();
+  // Clear stale signals + restart poll after short delay
+  api("/api/call/clear", {method:"POST"}).catch(()=>{});
+  setTimeout(() => startCallPoll(), 1500);
 }
 
 // ── Handle incoming signals ───────────────────────────────────────────────────
