@@ -1647,12 +1647,18 @@ async function startCall(type) {
     setTimeout(() => endCall(false), 6000); return;
   }
 
-  const roomUrl    = result.url;
-  const hostUrl    = result.host_url || result.url;
+  const roomUrl = result.url || result.roomUrl || result.room_url;
+  const hostUrl = result.host_url || result.hostUrl || roomUrl;
+
+  if (!roomUrl) {
+    callEl("call-status").textContent = "⚠ No room URL returned from server";
+    setTimeout(() => endCall(false), 4000); return;
+  }
+
   callEl("call-status").textContent = type === "video" ? "📹 Calling…" : "📞 Calling…";
 
-  // Signal other user with regular room URL
-  await sendSignal("ring", { callType: type, roomUrl });
+  // Explicitly stringify roomUrl to prevent JSON.stringify from dropping it
+  await sendSignal("ring", JSON.parse(JSON.stringify({ callType: type, roomUrl: String(roomUrl) })));
 
   // Caller joins as host
   launchWherebyFrame(hostUrl);

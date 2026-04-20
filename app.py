@@ -475,10 +475,15 @@ def api_call_room():
         )
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = _json.loads(resp.read())
+            room_url = data.get("roomUrl") or data.get("url") or ""
+            host_url = data.get("hostRoomUrl") or data.get("hostUrl") or room_url
+            if not room_url:
+                return jsonify({"ok": False, "error": f"Whereby returned no roomUrl. Keys: {list(data.keys())}"}), 500
             return jsonify({
                 "ok": True,
-                "url":      data.get("roomUrl"),
-                "host_url": data.get("hostRoomUrl", data.get("roomUrl"))
+                "url":      room_url,
+                "host_url": host_url,
+                "roomUrl":  room_url,   # belt-and-suspenders
             })
     except urllib.error.HTTPError as e:
         err_body = e.read().decode()
