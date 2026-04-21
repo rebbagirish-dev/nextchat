@@ -847,6 +847,8 @@ async function initApp() {
   pushSentinel();
   const su = document.getElementById("xl-status-user");
   if (su) su.textContent = "User: " + (myUsername || "—");
+  // Warm Whereby room cache silently so first call starts instantly
+  setTimeout(() => api("/api/call/room", {method:"POST"}).catch(()=>{}), 2000);
 }
 
 // ── Status ─────────────────────────────────────────────────────────────────────
@@ -1715,9 +1717,13 @@ function endCall(sendHangup) {
   stopCallTimer();
   callStartEpoch = 0; callStartedAt = null;
   hideCallOverlay();
-  // Clear stale signals + restart poll after short delay
-  api("/api/call/clear", {method:"POST"}).catch(()=>{});
-  setTimeout(() => startCallPoll(), 1500);
+  // Restart poll after delay — delay lets hangup signal be read by other user first
+  // Do NOT clear signals immediately (would delete the hangup before other user sees it)
+  setTimeout(() => {
+    // Now safe to clear any leftover stale signals and restart polling
+    api("/api/call/clear", {method:"POST"}).catch(()=>{});
+    startCallPoll();
+  }, 3000);
 }
 
 // ── Handle incoming signals ───────────────────────────────────────────────────

@@ -85,6 +85,12 @@ def init_db():
             )
         """)
         cur.execute("""
+            CREATE TABLE IF NOT EXISTS app_settings (
+                key   TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+        """)
+        cur.execute("""
             CREATE TABLE IF NOT EXISTS signaling (
                 id          SERIAL PRIMARY KEY,
                 from_id     INTEGER NOT NULL,
@@ -129,6 +135,10 @@ def init_db():
                 status      TEXT NOT NULL,
                 started_at  TEXT NOT NULL,
                 duration    INTEGER DEFAULT 0
+            );
+            CREATE TABLE IF NOT EXISTS app_settings (
+                key   TEXT PRIMARY KEY,
+                value TEXT NOT NULL
             );
             CREATE TABLE IF NOT EXISTS signaling (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -447,7 +457,7 @@ def api_call_history_clear():
 
 @app.route("/api/call/room", methods=["POST"])
 def api_call_room():
-    """Create a Whereby meeting room. Requires WHEREBY_API_KEY env var."""
+    """Return cached Whereby room URL, creating one only if needed."""
     user, err = require_auth()
     if err: return err
     import urllib.request, urllib.error, json as _json
@@ -456,36 +466,56 @@ def api_call_room():
     if not api_key:
         env_keys = [k for k in os.environ.keys() if "WHEREBY" in k.upper() or "API" in k.upper()]
         return jsonify({"ok": False,
-                        "error": f"WHEREBY_API_KEY not set. Detected API env vars: {env_keys}"}), 500
+                        "error": f"WHEREBY_API_KEY not set. Detected: {env_keys}"}), 500
 
-    end_date = (datetime.datetime.utcnow() +
-                datetime.timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
-    body = _json.dumps({
-        "endDate": end_date,
+    # Check cache first
+    cached = qfetchone("SELECT value FROM app_settings WHERE key='whereby_room'")
+    if cached:
+        try:
+            room_data = _json.loads(cached["value"])
+            # Check not expired (we store expiry timestamp)
+            exp = room_data.get("exp", 0)
+            if exp > datetime.datetime.utcnow().timestamp() + 300:  # 5min buffer
+                return jsonify({"ok": True,
+                                "url":      room_data["url"],
+                                "host_url": room_data["host_url"],
+                                "roomUrl":  room_data["url"]})
+        except Exception:
+            pass  # Cache corrupt — recreate
+
+    # Create new room valid for 23 hours
+    exp_dt  = datetime.datetime.utcnow() + datetime.timedelta(hours=23)
+    end_str = exp_dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    body    = _json.dumps({
+        "endDate":  end_str,
         "roomMode": "normal",
-        "fields": ["hostRoomUrl"]
+        "fields":   ["hostRoomUrl"]
     }).encode()
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
+    headers = {"Authorization": f"Bearer {api_key}",
+               "Content-Type": "application/json"}
     try:
         req = urllib.request.Request(
             "https://api.whereby.dev/v1/meetings",
             data=body, headers=headers, method="POST"
         )
         with urllib.request.urlopen(req, timeout=10) as resp:
-            data = _json.loads(resp.read())
+            data     = _json.loads(resp.read())
             room_url = data.get("roomUrl") or data.get("url") or ""
             host_url = data.get("hostRoomUrl") or data.get("hostUrl") or room_url
             if not room_url:
-                return jsonify({"ok": False, "error": f"Whereby returned no roomUrl. Keys: {list(data.keys())}"}), 500
-            return jsonify({
-                "ok": True,
-                "url":      room_url,
-                "host_url": host_url,
-                "roomUrl":  room_url,   # belt-and-suspenders
-            })
+                return jsonify({"ok": False,
+                                "error": f"Whereby returned no roomUrl. Keys: {list(data.keys())}"}), 500
+            # Cache for reuse
+            cache_val = _json.dumps({"url": room_url, "host_url": host_url,
+                                     "exp": exp_dt.timestamp()})
+            p = ph()
+            if qfetchone("SELECT 1 FROM app_settings WHERE key='whereby_room'"):
+                qexec(f"UPDATE app_settings SET value={p} WHERE key='whereby_room'", (cache_val,))
+            else:
+                qexec(f"INSERT INTO app_settings (key,value) VALUES ({p},{p})",
+                      ("whereby_room", cache_val))
+            return jsonify({"ok": True, "url": room_url,
+                            "host_url": host_url, "roomUrl": room_url})
     except urllib.error.HTTPError as e:
         err_body = e.read().decode()
         return jsonify({"ok": False, "error": f"Whereby error {e.code}: {err_body}"}), 500
