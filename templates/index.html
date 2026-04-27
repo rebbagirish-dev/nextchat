@@ -540,7 +540,7 @@ body {
     </div>
 
     <!-- Font size -->
-    <div style="margin-bottom:8px;">
+    <div style="margin-bottom:20px;">
       <label style="display:block;font-size:12px;font-weight:600;color:var(--xl-text);margin-bottom:8px;font-family:'Calibri',sans-serif;">
         🔤 Message font size
       </label>
@@ -554,6 +554,22 @@ body {
       <div style="margin-top:6px;font-size:11px;color:var(--xl-sub);font-family:'Calibri',sans-serif;">
         Current: <span id="font-size-label">12</span>px
       </div>
+    </div>
+
+    <!-- Lock overlay toggle -->
+    <div style="margin-bottom:8px;padding:12px;background:var(--xl-col-head);border-radius:8px;border:1px solid var(--xl-border);">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+        <div>
+          <div style="font-size:12px;font-weight:600;color:var(--xl-text);font-family:'Calibri',sans-serif;">🔒 Lock overlay on app switch</div>
+          <div style="font-size:11px;color:var(--xl-sub);font-family:'Calibri',sans-serif;margin-top:3px;">Shows Microsoft login screen when you switch apps or tabs</div>
+        </div>
+        <button id="overlay-toggle-btn" onclick="toggleOverlayLock()"
+          style="flex-shrink:0;width:52px;height:28px;border-radius:14px;border:none;cursor:pointer;position:relative;transition:background .2s;font-size:0;">
+          <span id="overlay-toggle-knob"
+            style="position:absolute;top:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 4px rgba(0,0,0,.2);"></span>
+        </button>
+      </div>
+      <div style="margin-top:8px;font-size:11px;font-family:'Calibri',sans-serif;" id="overlay-status-label"></div>
     </div>
 
     <div style="margin-top:18px;display:flex;justify-content:flex-end;">
@@ -1347,9 +1363,11 @@ document.getElementById("modal-confirm").addEventListener("click", async () => {
 });
 
 // ── Lock Overlay ───────────────────────────────────────────────────────────────
+let overlayEnabled = localStorage.getItem("nx_overlayEnabled") !== "false"; // default ON
 
 function showLock() {
-  if (!authToken) return;  // only lock if logged in
+  if (!authToken) return;
+  if (!overlayEnabled) return;  // skip if user disabled overlay
   document.getElementById("lock-overlay").classList.add("visible");
 }
 
@@ -1929,10 +1947,37 @@ function updateSettingChips() {
   });
 }
 
+function applyOverlayToggleUI() {
+  const btn   = document.getElementById("overlay-toggle-btn");
+  const knob  = document.getElementById("overlay-toggle-knob");
+  const label = document.getElementById("overlay-status-label");
+  if (!btn) return;
+  if (overlayEnabled) {
+    btn.style.background = "var(--xl-sel)";
+    knob.style.left = "27px";
+    label.textContent  = "✅ Enabled — app hides when you switch away";
+    label.style.color  = "var(--xl-status)";
+  } else {
+    btn.style.background = "#ccc";
+    knob.style.left = "3px";
+    label.textContent  = "⛔ Disabled — app stays visible when you switch away";
+    label.style.color  = "var(--xl-sub)";
+  }
+}
+
+function toggleOverlayLock() {
+  overlayEnabled = !overlayEnabled;
+  localStorage.setItem("nx_overlayEnabled", overlayEnabled);
+  applyOverlayToggleUI();
+  // If disabling, make sure any current lock is hidden
+  if (!overlayEnabled) hideLock();
+}
+
 function openSettings() {
   updateSettingChips();
   applyRevealLabel();
   document.getElementById("font-size-label").textContent = appFontSize;
+  applyOverlayToggleUI();
   document.getElementById("settings-modal").classList.add("open");
 }
 function closeSettings() {
@@ -1974,6 +2019,7 @@ setInterval(() => fetch("/keep-alive").catch(() => {}), 10 * 60 * 1000);
 document.documentElement.classList.add("light"); // always light theme
 updateMuteBtn();
 applyFontSize();
+applyOverlayToggleUI();
 document.title = BASE_TITLE;
 (async () => { if (authToken) await initApp(); })();
 </script>
