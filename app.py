@@ -220,10 +220,9 @@ def now_ts():
     return datetime.datetime.now(ist).strftime("%I:%M %p")
 
 def now_ts_full():
-    """Full IST datetime string for last_seen — includes date so it's always accurate."""
+    """Full IST datetime string for last_seen."""
     ist = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
     now = datetime.datetime.now(ist)
-    # Show "Today HH:MM AM/PM" or "DD MMM HH:MM AM/PM"
     return now.strftime("%d %b, %I:%M %p")
 
 def now_dt():
@@ -237,6 +236,29 @@ def is_active(last_active_str, threshold=10):
         return (datetime.datetime.utcnow() - last).total_seconds() < threshold
     except:
         return False
+
+def last_seen_from_active(last_active_str, stored_last_seen):
+    """Compute accurate last seen string from last_active timestamp."""
+    if not last_active_str:
+        return stored_last_seen or ""
+    try:
+        last = datetime.datetime.strptime(str(last_active_str)[:19], "%Y-%m-%d %H:%M:%S")
+        secs = (datetime.datetime.utcnow() - last).total_seconds()
+        if secs < 60:
+            return "just now"
+        elif secs < 3600:
+            m = int(secs // 60)
+            return f"{m} min{'s' if m > 1 else ''} ago"
+        elif secs < 86400:
+            h = int(secs // 3600)
+            return f"{h} hr{'s' if h > 1 else ''} ago"
+        else:
+            # Fall back to stored last_seen which has the date
+            ist = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+            ist_time = last.replace(tzinfo=datetime.timezone.utc).astimezone(ist)
+            return ist_time.strftime("%d %b, %I:%M %p")
+    except:
+        return stored_last_seen or ""
 
 def get_user_by_token(token):
     if not token:
@@ -333,7 +355,7 @@ def api_other():
         "id":        other["id"],
         "username":  other["username"],
         "online":    1 if is_active(other["last_active"]) else 0,
-        "last_seen": other["last_seen"] or "",
+        "last_seen": last_seen_from_active(other["last_active"], other["last_seen"]),
     })
 
 @app.route("/api/messages")
@@ -401,7 +423,7 @@ def api_poll():
         "logged_in":       True,
         "msg_count":       total,
         "other_online":    1 if (other and is_active(other["last_active"])) else 0,
-        "other_last_seen": other["last_seen"] if other else "",
+        "other_last_seen": last_seen_from_active(other["last_active"], other["last_seen"]) if other else "",
         "other_typing":    other["typing"]    if other else 0,
     })
 
