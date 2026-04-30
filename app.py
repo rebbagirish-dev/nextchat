@@ -70,7 +70,8 @@ def init_db():
                 receiver_id INTEGER NOT NULL,
                 body        TEXT NOT NULL,
                 timestamp   TEXT NOT NULL,
-                status      TEXT DEFAULT 'sent'
+                status      TEXT DEFAULT 'sent',
+                reply_to    INTEGER
             )
         """)
         cur.execute("""
@@ -125,7 +126,8 @@ def init_db():
                 receiver_id INTEGER NOT NULL,
                 body        TEXT NOT NULL,
                 timestamp   TEXT NOT NULL,
-                status      TEXT DEFAULT 'sent'
+                status      TEXT DEFAULT 'sent',
+                reply_to    INTEGER
             );
             CREATE TABLE IF NOT EXISTS call_history (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -368,13 +370,16 @@ def api_messages():
     if not other:
         return jsonify([])
     other_id = other["id"]
-    # Mark incoming messages as delivered (not read — read only on explicit view)
+    # Mark incoming messages as delivered
     qexec(f"UPDATE messages SET status='delivered' WHERE sender_id={p} AND receiver_id={p} AND status='sent'",
           (other_id, my_id))
     rows = qfetch(f"""
-        SELECT id, sender_id, body, timestamp, status FROM messages
-        WHERE (sender_id={p} AND receiver_id={p}) OR (sender_id={p} AND receiver_id={p})
-        ORDER BY id ASC
+        SELECT m.id, m.sender_id, m.body, m.timestamp, m.status, m.reply_to,
+               r.body AS reply_body, r.sender_id AS reply_sender_id
+        FROM messages m
+        LEFT JOIN messages r ON m.reply_to = r.id
+        WHERE (m.sender_id={p} AND m.receiver_id={p}) OR (m.sender_id={p} AND m.receiver_id={p})
+        ORDER BY m.id ASC
     """, (my_id, other_id, other_id, my_id))
     return jsonify(rows)
 
@@ -383,8 +388,8 @@ def api_send():
     user, err = require_auth()
     if err: return err
     data = request.get_json(force=True, silent=True) or {}
-    body = data.get("body", "")
-    # Don't strip image data; strip only text messages
+    body     = data.get("body", "")
+    reply_to = data.get("reply_to", None)
     if not body.startswith("[IMG]"):
         body = body.strip()
     if not body:
@@ -395,8 +400,8 @@ def api_send():
     if not other:
         return jsonify({"ok": False})
     qexec(
-        f"INSERT INTO messages (sender_id,receiver_id,body,timestamp,status) VALUES ({phs(5)})",
-        (my_id, other["id"], body, now_ts(), "sent")
+        f"INSERT INTO messages (sender_id,receiver_id,body,timestamp,status,reply_to) VALUES ({phs(6)})",
+        (my_id, other["id"], body, now_ts(), "sent", reply_to)
     )
     return jsonify({"ok": True})
 

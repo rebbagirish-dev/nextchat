@@ -193,11 +193,16 @@ body {
 .xl-cell-c.them-cell { background:var(--xl-cell-them); }
 .xl-cell-c.encrypted-cell { font-family:monospace; color:var(--xl-sub); font-size:10.5px; letter-spacing:.5px; cursor:pointer; opacity:.7; }
 .xl-cell-c.encrypted-cell:hover { background:rgba(33,115,70,.08); opacity:1; }
-.xl-cell-d { width:58px; min-width:58px; font-size:10.5px; color:var(--xl-sub); padding:2px 4px; display:flex; align-items:center; justify-content:center; border-right:1px solid var(--xl-border); flex-shrink:0; }
+.xl-cell-d { width:90px; min-width:90px; font-size:10px; color:var(--xl-sub); padding:2px 5px; display:flex; align-items:center; border-right:1px solid var(--xl-border); flex-shrink:0; overflow:hidden; cursor:default; font-family:'Calibri',sans-serif; font-style:italic; }
 .xl-cell-e { width:34px; min-width:34px; font-size:11px; padding:2px 4px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
 .tick { font-size:11px; color:var(--xl-sub); } .tick.read { color:#2E75B6; }
 .xl-lock { font-size:9px; margin-right:3px; opacity:.5; }
-.xl-row.selected-row .xl-cell-c { outline:2px solid var(--xl-sel); outline-offset:-2px; }
+.xl-reply-icon { opacity:0; cursor:pointer; font-size:13px; padding:1px 3px; border-radius:3px; transition:opacity .15s, background .15s; margin-left:4px; flex-shrink:0; }
+.xl-row:hover .xl-reply-icon { opacity:0.6; }
+.xl-reply-icon:hover { opacity:1 !important; background:var(--xl-header-row); }
+.xl-reply-bar { background:var(--xl-header-row); border-left:3px solid var(--xl-sel); padding:4px 8px; font-size:11px; color:var(--xl-sub); border-radius:0 4px 4px 0; margin-bottom:2px; display:flex; align-items:center; gap:8px; font-family:'Calibri',sans-serif; flex-shrink:0; }
+.xl-reply-bar .xl-reply-cancel { cursor:pointer; color:var(--xl-sub); font-size:14px; margin-left:auto; padding:0 2px; }
+.xl-reply-bar .xl-reply-cancel:hover { color:var(--xl-text); }
 .xl-empty { padding:20px 52px; font-size:12px; color:var(--xl-sub); font-style:italic; font-family:'Calibri',sans-serif; }
 .xl-revealing .xl-cell-c { animation:xlReveal .25s ease; }
 @keyframes xlReveal{0%{opacity:0}100%{opacity:1}}
@@ -303,7 +308,7 @@ body {
 
 @media (max-width:480px){
   .xl-cell-a{width:52px;min-width:52px} .xl-cell-b{width:60px;min-width:60px}
-  .xl-cell-d{width:42px;min-width:42px} .xl-row-num{width:28px;min-width:28px}
+  .xl-cell-d{width:70px;min-width:70px} .xl-row-num{width:28px;min-width:28px}
   .login-card{width:92%;padding:32px 24px}
 }
 </style>
@@ -435,6 +440,13 @@ body {
   </div>
 
   <!-- Input row -->
+  <!-- Reply bar — shown when replying to a message -->
+  <div id="reply-bar" style="display:none;align-items:center;gap:8px;padding:4px 10px;background:var(--xl-header-row);border-bottom:1px solid var(--xl-border);border-left:3px solid var(--xl-sel);flex-shrink:0;">
+    <span style="font-size:11px;color:var(--xl-sub);font-family:'Calibri',sans-serif;">↩ Replying to:</span>
+    <span id="reply-bar-text" style="font-size:11px;color:var(--xl-text);font-family:'Calibri',sans-serif;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+    <button id="reply-bar-cancel" style="background:none;border:none;color:var(--xl-sub);font-size:16px;cursor:pointer;padding:0 2px;" title="Cancel reply">✕</button>
+  </div>
+
   <div class="xl-input-row" style="position:relative;">
     <div class="emoji-picker" id="emoji-picker"></div>
     <span style="font-size:11px;color:var(--xl-sub);white-space:nowrap;font-family:'Calibri',sans-serif;">▶ Entry:</span>
@@ -456,10 +468,10 @@ body {
     <!-- Column headers -->
     <div class="xl-col-headers">
       <div class="xl-row-num-head"></div>
-      <div class="xl-col-head-cell">A — Timestamp</div>
-      <div class="xl-col-head-cell">B — User</div>
-      <div class="xl-col-head-cell" style="flex:2">C — Entry</div>
-      <div class="xl-col-head-cell" style="width:58px;min-width:58px;flex:none">D — Time</div>
+      <div class="xl-col-head-cell" style="width:78px;min-width:78px;flex:none">A — Timestamp</div>
+      <div class="xl-col-head-cell" style="width:88px;min-width:88px;flex:none">B — User</div>
+      <div class="xl-col-head-cell" style="flex:1">C — Entry</div>
+      <div class="xl-col-head-cell" style="width:90px;min-width:90px;flex:none">D — Reply</div>
       <div class="xl-col-head-cell" style="width:34px;min-width:34px;flex:none">E</div>
     </div>
 
@@ -1046,10 +1058,29 @@ async function loadMessages() {
       });
     }
 
-    // Column D - time only
+    // Column D - reply content (if this message is a reply)
     const cellD = document.createElement("div");
     cellD.className = "xl-cell-d";
-    cellD.textContent = timeOnly;
+    if (msg.reply_to && msg.reply_body) {
+      const replyIsImage = String(msg.reply_body).startsWith(IMG_PREFIX);
+      const replyPreview = replyIsImage ? "📎 Image" :
+        String(msg.reply_body).slice(0, 28) + (msg.reply_body.length > 28 ? "…" : "");
+      cellD.textContent = replyPreview;
+      cellD.title = replyIsImage ? "Reply to an image" : msg.reply_body;
+    }
+
+    // Reply icon — shown on hover in cellC, clicking sets up a reply
+    const replyIcon = document.createElement("span");
+    replyIcon.className = "xl-reply-icon";
+    replyIcon.textContent = "↩";
+    replyIcon.title = "Reply to this message";
+    replyIcon.addEventListener("click", e => {
+      e.stopPropagation();
+      const previewText = isImage ? "📎 Image" :
+        msg.body.slice(0, 50) + (msg.body.length > 50 ? "…" : "");
+      setReply(msg.id, previewText);
+    });
+    cellC.appendChild(replyIcon);
 
     // Column E - tick
     const cellE = document.createElement("div");
@@ -1115,6 +1146,7 @@ function revealRow(row, originalText, msgId) {
 }
 // ── Image upload ───────────────────────────────────────────────────────────────
 let pendingImage = null;  // { dataUrl, name }
+let replyToId    = null;  // message id being replied to
 const IMG_PREFIX = "[IMG]";
 const MAX_IMG_SIZE = 800; // max dimension px before resize
 
@@ -1194,11 +1226,23 @@ function openLightbox(src) {
 // ── Send ───────────────────────────────────────────────────────────────────────
 function autoResize(el) { el.style.height = "auto"; el.style.height = Math.min(el.scrollHeight, 120) + "px"; }
 
+function setReply(msgId, previewText) {
+  replyToId = msgId;
+  document.getElementById("reply-bar-text").textContent = previewText;
+  document.getElementById("reply-bar").style.display = "flex";
+  document.getElementById("msg-input").focus();
+}
+function clearReply() {
+  replyToId = null;
+  document.getElementById("reply-bar").style.display = "none";
+  document.getElementById("reply-bar-text").textContent = "";
+}
+document.getElementById("reply-bar-cancel").addEventListener("click", clearReply);
+
 async function sendMessage() {
   const input = document.getElementById("msg-input");
   let body = input.value.trim();
 
-  // If there's a pending image, send it (with optional caption)
   if (pendingImage) {
     const caption = body ? `\n${body}` : "";
     body = IMG_PREFIX + pendingImage.dataUrl + caption;
@@ -1206,9 +1250,11 @@ async function sendMessage() {
   }
 
   if (!body) return;
+  const rid = replyToId;  // capture before clearing
   input.value = ""; autoResize(input);
+  clearReply();
   clearTimeout(typingTimer); setTyping(false);
-  await api("/api/send", {method:"POST", body:JSON.stringify({body})});
+  await api("/api/send", {method:"POST", body:JSON.stringify({body, reply_to: rid})});
   await loadMessages();
 }
 document.getElementById("send-btn").addEventListener("click", sendMessage);
