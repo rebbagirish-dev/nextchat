@@ -194,7 +194,7 @@ body {
 .xl-cell-c.encrypted-cell { font-family:monospace; color:var(--xl-sub); font-size:10.5px; letter-spacing:.5px; cursor:pointer; opacity:.7; }
 .xl-cell-c.encrypted-cell:hover { background:rgba(33,115,70,.08); opacity:1; }
 .xl-cell-d { flex:2; min-width:0; overflow:hidden; font-size:10.5px; color:var(--xl-sub); padding:2px 5px; display:flex; align-items:center; gap:4px; border-right:1px solid var(--xl-border); font-family:'Calibri',sans-serif; }
-.xl-reply-encrypted { font-family:monospace; font-size:9.5px; letter-spacing:.3px; opacity:.7; cursor:pointer; }
+.xl-reply-encrypted { font-family:monospace; font-size:9.5px; letter-spacing:.3px; opacity:.7; cursor:default; }
 .xl-cell-e { width:34px; min-width:34px; font-size:11px; padding:2px 4px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
 .tick { font-size:11px; color:var(--xl-sub); } .tick.read { color:#2E75B6; }
 .xl-lock { font-size:9px; margin-right:3px; opacity:.5; }
@@ -1070,6 +1070,7 @@ async function loadMessages() {
     const cellD = document.createElement("div");
     cellD.className = "xl-cell-d";
     cellD.style.overflow = "hidden";
+    cellD.style.cursor = "default";
 
     const hasReply     = msg.reply_to && msg.reply_body;
     const replyIsImage = hasReply && String(msg.reply_body).startsWith(IMG_PREFIX);
@@ -1083,7 +1084,6 @@ async function loadMessages() {
     const replyIcon = document.createElement("span");
     replyIcon.className = "xl-reply-icon";
     replyIcon.textContent = "↩";
-    replyIcon.title = "Reply to this message";
     replyIcon.style.flexShrink = "0";
     replyIcon.addEventListener("click", e => {
       e.stopPropagation();
@@ -1096,7 +1096,7 @@ async function loadMessages() {
     if (hasReply) {
       const isReplyRevealed = revealedMsgs.has(dMsgId);
       const replySpan = document.createElement("span");
-      replySpan.style.cssText = "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:default;font-style:italic;";
+      replySpan.style.cssText = "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:default;pointer-events:none;font-style:italic;";
 
       function encryptReplySpan() {
         replySpan.classList.add("xl-reply-encrypted");
