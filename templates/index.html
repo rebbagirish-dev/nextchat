@@ -1014,6 +1014,7 @@ async function loadMessages() {
         document.querySelectorAll(".xl-row.selected-row").forEach(r => r.classList.remove("selected-row"));
         row.classList.add("selected-row");
         row.dataset.msgBody = msg.body;
+        row.dataset.msgId   = msg.id;
       });
     } else {
       // Visible state
@@ -1095,17 +1096,17 @@ async function loadMessages() {
     if (hasReply) {
       const isReplyRevealed = revealedMsgs.has(dMsgId);
       const replySpan = document.createElement("span");
-      replySpan.style.cssText = "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;font-style:italic;";
+      replySpan.style.cssText = "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:default;font-style:italic;";
 
       function encryptReplySpan() {
         replySpan.classList.add("xl-reply-encrypted");
         replySpan.innerHTML = `🔒&nbsp;${escHtml(encryptText(replyFull, dMsgId).slice(0, 22))}`;
-        replySpan.title = "Click or F4 to reveal";
+        replySpan.removeAttribute("title");
       }
       function decryptReplySpan() {
         replySpan.classList.remove("xl-reply-encrypted");
         replySpan.textContent = replyPreview;
-        replySpan.title = replyFull;
+        replySpan.removeAttribute("title");
         revealedMsgs.add(dMsgId);
         setTimeout(() => {
           revealedMsgs.delete(dMsgId);
@@ -1119,13 +1120,7 @@ async function loadMessages() {
         encryptReplySpan();
       }
 
-      replySpan.addEventListener("click", e => {
-        e.stopPropagation();
-        if (replySpan.classList.contains("xl-reply-encrypted")) decryptReplySpan();
-        else encryptReplySpan();
-      });
-
-      // Store refs on cellD for F4/re-encrypt access
+      // No click listener — F4 only (via cellD._decryptFn)
       cellD._replySpan = replySpan;
       cellD._replyFull = replyFull;
       cellD._replyId   = dMsgId;
@@ -1497,7 +1492,11 @@ document.addEventListener("keydown", e => {
   const msgBody = selected.dataset.msgBody;
   if (!msgBody || !msgId) return;
   selected.classList.remove("selected-row");
+  // Decrypt column C (main message)
   revealRow(selected, msgBody, msgId);
+  // Decrypt column D (reply preview) if present
+  const cellD = selected.querySelector(".xl-cell-d");
+  if (cellD && cellD._decryptFn) cellD._decryptFn();
 });
 
 // Mobile: long-press anywhere on lock overlay to unlock (hold 1.5s)
