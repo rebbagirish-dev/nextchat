@@ -182,18 +182,19 @@ body {
 #chat-area::-webkit-scrollbar-track{background:var(--xl-bg)}
 #chat-area::-webkit-scrollbar-thumb{background:var(--xl-border);border:2px solid var(--xl-bg);border-radius:6px}
 
-.xl-row { display:flex; border-bottom:1px solid var(--xl-border); min-height:22px; animation:xlRowIn .15s ease; }
+.xl-row { display:flex; border-bottom:1px solid var(--xl-border); min-height:22px; animation:xlRowIn .15s ease; overflow:hidden; position:relative; }
 .xl-row:hover { background:rgba(33,115,70,.05); }
 .xl-row-num { width:42px; min-width:42px; text-align:right; font-size:11px; color:var(--xl-sub); padding:2px 6px 2px 0; border-right:2px solid var(--xl-border); background:var(--xl-col-head); flex-shrink:0; display:flex; align-items:center; justify-content:flex-end; font-family:'Calibri',monospace; }
 .xl-cell-a { width:78px; min-width:78px; border-right:1px solid var(--xl-border); font-size:11px; color:var(--xl-sub); padding:2px 6px; display:flex; align-items:center; flex-shrink:0; font-family:'Calibri',sans-serif; }
 .xl-cell-b { width:88px; min-width:88px; border-right:1px solid var(--xl-border); font-size:11px; font-weight:600; padding:2px 6px; display:flex; align-items:center; flex-shrink:0; font-family:'Calibri',sans-serif; }
 .xl-cell-b.me { color:var(--xl-sel); } .xl-cell-b.them { color:#C55A11; }
-.xl-cell-c { flex:1; padding:2px 8px; font-size:12.5px; color:var(--xl-text); display:flex; align-items:center; word-break:break-word; border-right:1px solid var(--xl-border); font-family:'Calibri',sans-serif; line-height:1.4; }
+.xl-cell-c { flex:3; min-width:0; overflow:hidden; padding:2px 8px; font-size:12.5px; color:var(--xl-text); display:flex; align-items:center; word-break:break-word; border-right:1px solid var(--xl-border); font-family:'Calibri',sans-serif; line-height:1.4; }
 .xl-cell-c.me-cell { background:var(--xl-cell-me); }
 .xl-cell-c.them-cell { background:var(--xl-cell-them); }
 .xl-cell-c.encrypted-cell { font-family:monospace; color:var(--xl-sub); font-size:10.5px; letter-spacing:.5px; cursor:pointer; opacity:.7; }
 .xl-cell-c.encrypted-cell:hover { background:rgba(33,115,70,.08); opacity:1; }
-.xl-cell-d { width:90px; min-width:90px; font-size:10px; color:var(--xl-sub); padding:2px 5px; display:flex; align-items:center; border-right:1px solid var(--xl-border); flex-shrink:0; overflow:hidden; cursor:default; font-family:'Calibri',sans-serif; font-style:italic; }
+.xl-cell-d { flex:2; min-width:0; overflow:hidden; font-size:10.5px; color:var(--xl-sub); padding:2px 5px; display:flex; align-items:center; gap:4px; border-right:1px solid var(--xl-border); font-family:'Calibri',sans-serif; }
+.xl-reply-encrypted { font-family:monospace; font-size:9.5px; letter-spacing:.3px; opacity:.7; cursor:pointer; }
 .xl-cell-e { width:34px; min-width:34px; font-size:11px; padding:2px 4px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
 .tick { font-size:11px; color:var(--xl-sub); } .tick.read { color:#2E75B6; }
 .xl-lock { font-size:9px; margin-right:3px; opacity:.5; }
@@ -308,7 +309,7 @@ body {
 
 @media (max-width:480px){
   .xl-cell-a{width:52px;min-width:52px} .xl-cell-b{width:60px;min-width:60px}
-  .xl-cell-d{width:70px;min-width:70px} .xl-row-num{width:28px;min-width:28px}
+  .xl-row-num{width:28px;min-width:28px}
   .login-card{width:92%;padding:32px 24px}
 }
 </style>
@@ -470,8 +471,8 @@ body {
       <div class="xl-row-num-head"></div>
       <div class="xl-col-head-cell" style="width:78px;min-width:78px;flex:none">A — Timestamp</div>
       <div class="xl-col-head-cell" style="width:88px;min-width:88px;flex:none">B — User</div>
-      <div class="xl-col-head-cell" style="flex:1">C — Entry</div>
-      <div class="xl-col-head-cell" style="width:90px;min-width:90px;flex:none">D — Reply</div>
+      <div class="xl-col-head-cell" style="flex:3;min-width:0">C — Entry</div>
+      <div class="xl-col-head-cell" style="flex:2;min-width:0">D — Reply</div>
       <div class="xl-col-head-cell" style="width:34px;min-width:34px;flex:none">E</div>
     </div>
 
@@ -992,22 +993,19 @@ async function loadMessages() {
     cellB.className = `xl-cell-b ${isMe ? "me" : "them"}`;
     cellB.textContent = isMe ? (myUsername || "Me") : otherName;
 
-    // Column C - message content
+    // ── Column C — message content ─────────────────────────────────────────────
     const cellC = document.createElement("div");
-    const timeParts = msg.timestamp.split(" ");
-    const timeOnly  = timeParts[0] || msg.timestamp;
-
     const isImage = msg.body.startsWith(IMG_PREFIX);
 
     if (!isVisible && !isRevealed) {
+      // Encrypted state
       cellC.className = `xl-cell-c ${isMe ? "me-cell" : "them-cell"} encrypted-cell`;
+      cellC.style.overflow = "hidden";
       cellA.style.cursor = "default";
       cellA.title = "";
-      if (isImage) {
-        cellC.innerHTML = `<span class="xl-lock">🔒</span> 📎 <em style="font-size:11px">Attachment encrypted</em>`;
-      } else {
-        cellC.innerHTML = `<span class="xl-lock">🔒</span>${escHtml(encryptText(msg.body, msg.id))}`;
-      }
+      cellC.innerHTML = isImage
+        ? `<span class="xl-lock">🔒</span>&nbsp;📎 <em style="font-size:11px">Attachment encrypted</em>`
+        : `<span class="xl-lock">🔒</span>${escHtml(encryptText(msg.body, msg.id))}`;
       let touchTimer = null;
       row.addEventListener("touchstart", () => { touchTimer = setTimeout(() => revealRow(row, msg.body, msg.id), 600); }, {passive:true});
       row.addEventListener("touchend",   () => clearTimeout(touchTimer), {passive:true});
@@ -1018,7 +1016,9 @@ async function loadMessages() {
         row.dataset.msgBody = msg.body;
       });
     } else {
+      // Visible state
       cellC.className = `xl-cell-c ${isMe ? "me-cell" : "them-cell"}`;
+      cellC.style.overflow = "hidden";
       if (isImage) {
         const rest    = msg.body.slice(IMG_PREFIX.length);
         const nlIdx   = rest.indexOf("\n");
@@ -1039,48 +1039,101 @@ async function loadMessages() {
       } else {
         cellC.innerHTML = formatBody(msg.body);
       }
-
-      // Click on timestamp (col A) encrypts this visible row immediately
+      // Click col A to re-encrypt
       cellA.addEventListener("click", e => {
         e.stopPropagation();
-        // Remove from revealedMsgs so it stays encrypted
         revealedMsgs.delete(msg.id);
         visibleIndices.delete(idx);
-        // Re-render just this cell to encrypted state
         cellA.style.cursor = "default";
         cellA.title = "";
         cellC.className = `xl-cell-c ${isMe ? "me-cell" : "them-cell"} encrypted-cell`;
-        if (isImage) {
-          cellC.innerHTML = `<span class="xl-lock">🔒</span> 📎 <em style="font-size:11px">Attachment encrypted</em>`;
-        } else {
-          cellC.innerHTML = `<span class="xl-lock">🔒</span>${escHtml(encryptText(msg.body, msg.id))}`;
+        cellC.style.overflow = "hidden";
+        cellC.innerHTML = isImage
+          ? `<span class="xl-lock">🔒</span>&nbsp;📎 <em style="font-size:11px">Attachment encrypted</em>`
+          : `<span class="xl-lock">🔒</span>${escHtml(encryptText(msg.body, msg.id))}`;
+        // Also re-encrypt D-reply if visible
+        if (cellD._replySpan) {
+          const rs = cellD._replySpan;
+          const rf = cellD._replyFull;
+          const rid = cellD._replyId;
+          if (rid) {
+            revealedMsgs.delete(rid);
+            rs.classList.add("xl-reply-encrypted");
+            rs.innerHTML = `🔒&nbsp;${escHtml(encryptText(rf, rid).slice(0, 22))}`;
+          }
         }
       });
     }
 
-    // Column D - reply content (if this message is a reply)
+    // ── Column D — reply content + reply icon ───────────────────────────────────
     const cellD = document.createElement("div");
     cellD.className = "xl-cell-d";
-    if (msg.reply_to && msg.reply_body) {
-      const replyIsImage = String(msg.reply_body).startsWith(IMG_PREFIX);
-      const replyPreview = replyIsImage ? "📎 Image" :
-        String(msg.reply_body).slice(0, 28) + (msg.reply_body.length > 28 ? "…" : "");
-      cellD.textContent = replyPreview;
-      cellD.title = replyIsImage ? "Reply to an image" : msg.reply_body;
-    }
+    cellD.style.overflow = "hidden";
 
-    // Reply icon — shown on hover in cellC, clicking sets up a reply
+    const hasReply     = msg.reply_to && msg.reply_body;
+    const replyIsImage = hasReply && String(msg.reply_body).startsWith(IMG_PREFIX);
+    const replyFull    = hasReply ? String(msg.reply_body) : "";
+    const replyPreview = hasReply
+      ? (replyIsImage ? "📎 Image" : replyFull.slice(0, 35) + (replyFull.length > 35 ? "…" : ""))
+      : "";
+    const dMsgId = String(msg.id) + "_reply";
+
+    // Reply icon — hover-visible, always shown
     const replyIcon = document.createElement("span");
     replyIcon.className = "xl-reply-icon";
     replyIcon.textContent = "↩";
     replyIcon.title = "Reply to this message";
+    replyIcon.style.flexShrink = "0";
     replyIcon.addEventListener("click", e => {
       e.stopPropagation();
-      const previewText = isImage ? "📎 Image" :
-        msg.body.slice(0, 50) + (msg.body.length > 50 ? "…" : "");
-      setReply(msg.id, previewText);
+      const preview = isImage ? "📎 Image" : msg.body.slice(0, 50) + (msg.body.length > 50 ? "…" : "");
+      setReply(msg.id, preview);
     });
-    cellC.appendChild(replyIcon);
+    cellD.appendChild(replyIcon);
+
+    // Reply content span — only if this message is a reply
+    if (hasReply) {
+      const isReplyRevealed = revealedMsgs.has(dMsgId);
+      const replySpan = document.createElement("span");
+      replySpan.style.cssText = "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;font-style:italic;";
+
+      function encryptReplySpan() {
+        replySpan.classList.add("xl-reply-encrypted");
+        replySpan.innerHTML = `🔒&nbsp;${escHtml(encryptText(replyFull, dMsgId).slice(0, 22))}`;
+        replySpan.title = "Click or F4 to reveal";
+      }
+      function decryptReplySpan() {
+        replySpan.classList.remove("xl-reply-encrypted");
+        replySpan.textContent = replyPreview;
+        replySpan.title = replyFull;
+        revealedMsgs.add(dMsgId);
+        setTimeout(() => {
+          revealedMsgs.delete(dMsgId);
+          encryptReplySpan();
+        }, typeof revealTime !== "undefined" ? revealTime : 5000);
+      }
+
+      if (isReplyRevealed) {
+        decryptReplySpan();
+      } else {
+        encryptReplySpan();
+      }
+
+      replySpan.addEventListener("click", e => {
+        e.stopPropagation();
+        if (replySpan.classList.contains("xl-reply-encrypted")) decryptReplySpan();
+        else encryptReplySpan();
+      });
+
+      // Store refs on cellD for F4/re-encrypt access
+      cellD._replySpan = replySpan;
+      cellD._replyFull = replyFull;
+      cellD._replyId   = dMsgId;
+      cellD._decryptFn = decryptReplySpan;
+      cellD._encryptFn = encryptReplySpan;
+
+      cellD.appendChild(replySpan);
+    }
 
     // Column E - tick
     const cellE = document.createElement("div");
