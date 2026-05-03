@@ -987,7 +987,7 @@ async function loadMessages() {
     cellA.className = "xl-cell-a";
     cellA.textContent = msg.timestamp;
     cellA.style.cursor = "pointer";
-    cellA.title = "Click to encrypt this row";
+
 
     // Column B - username
     const cellB = document.createElement("div");
@@ -1003,7 +1003,7 @@ async function loadMessages() {
       cellC.className = `xl-cell-c ${isMe ? "me-cell" : "them-cell"} encrypted-cell`;
       cellC.style.overflow = "hidden";
       cellA.style.cursor = "default";
-      cellA.title = "";
+
       cellC.innerHTML = isImage
         ? `<span class="xl-lock">🔒</span>&nbsp;📎 <em style="font-size:11px">Attachment encrypted</em>`
         : `<span class="xl-lock">🔒</span>${escHtml(encryptText(msg.body, msg.id))}`;
@@ -1041,7 +1041,7 @@ async function loadMessages() {
         revealedMsgs.delete(msg.id);
         visibleIndices.delete(idx);
         cellA.style.cursor = "default";
-        cellA.title = "";
+  
         cellC.className = `xl-cell-c ${isMe ? "me-cell" : "them-cell"} encrypted-cell`;
         cellC.style.overflow = "hidden";
         cellC.innerHTML = isImage
@@ -1067,7 +1067,7 @@ async function loadMessages() {
     cellD.style.overflow = "hidden";
     cellD.style.cursor = "default";
 
-    const hasReply     = msg.reply_to && msg.reply_body;
+    const hasReply     = !!(msg.reply_body);
     const replyIsImage = hasReply && String(msg.reply_body).startsWith(IMG_PREFIX);
     const replyFull    = hasReply ? String(msg.reply_body) : "";
     const replyPreview = hasReply
