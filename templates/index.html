@@ -974,7 +974,8 @@ async function loadMessages() {
 
     const row = document.createElement("div");
     row.className = "xl-row";
-    row.dataset.msgId = msg.id;
+    row.dataset.msgId   = msg.id;
+    row.dataset.msgBody = msg.body;
 
     // Row number cell
     const numCell = document.createElement("div");
@@ -1010,12 +1011,6 @@ async function loadMessages() {
       row.addEventListener("touchstart", () => { touchTimer = setTimeout(() => revealRow(row, msg.body, msg.id), 600); }, {passive:true});
       row.addEventListener("touchend",   () => clearTimeout(touchTimer), {passive:true});
       row.addEventListener("touchmove",  () => clearTimeout(touchTimer), {passive:true});
-      row.addEventListener("click", () => {
-        document.querySelectorAll(".xl-row.selected-row").forEach(r => r.classList.remove("selected-row"));
-        row.classList.add("selected-row");
-        row.dataset.msgBody = msg.body;
-        row.dataset.msgId   = msg.id;
-      });
     } else {
       // Visible state
       cellC.className = `xl-cell-c ${isMe ? "me-cell" : "them-cell"}`;
@@ -1473,6 +1468,27 @@ function isLocked() {
   return document.getElementById("lock-overlay").classList.contains("visible");
 }
 
+// Track which cell the user last clicked — F4 decrypts only that cell
+let focusedCell = null;  // { row, cellType: 'C'|'D', msgId, msgBody, cellEl }
+
+document.addEventListener("click", e => {
+  const row = e.target.closest(".xl-row");
+  if (!row) { focusedCell = null; return; }
+  const msgId   = parseInt(row.dataset.msgId);
+  const msgBody = row.dataset.msgBody;
+  // Determine which cell was clicked
+  const cellC = row.querySelector(".xl-cell-c");
+  const cellD = row.querySelector(".xl-cell-d");
+  if (cellC && cellC.contains(e.target)) {
+    focusedCell = { row, cellType: "C", msgId, msgBody, cellEl: cellC };
+  } else if (cellD && cellD.contains(e.target)) {
+    // Only set D focus if it has a decrypt function (has reply content)
+    if (cellD._decryptFn) {
+      focusedCell = { row, cellType: "D", msgId, msgBody, cellEl: cellD };
+    }
+  }
+}, true);
+
 // Desktop: unlock with Alt+D or F4
 document.addEventListener("keydown", e => {
   if (isLocked()) {
@@ -1481,22 +1497,22 @@ document.addEventListener("keydown", e => {
     if (isAltD || isF4) { e.preventDefault(); hideLock(); }
     return;
   }
-  // Decrypt selected row with Alt+D or F4
   const isAltD = e.altKey && e.key === "d";
   const isF4   = e.key === "F4" && !e.ctrlKey && !e.shiftKey && !e.metaKey;
   if (!isAltD && !isF4) return;
   e.preventDefault();
-  const selected = document.querySelector(".xl-row.selected-row");
-  if (!selected) return;
-  const msgId   = parseInt(selected.dataset.msgId);
-  const msgBody = selected.dataset.msgBody;
-  if (!msgBody || !msgId) return;
-  selected.classList.remove("selected-row");
-  // Decrypt column C (main message)
-  revealRow(selected, msgBody, msgId);
-  // Decrypt column D (reply preview) if present
-  const cellD = selected.querySelector(".xl-cell-d");
-  if (cellD && cellD._decryptFn) cellD._decryptFn();
+
+  if (!focusedCell) return;
+  const { row, cellType, msgId, msgBody, cellEl } = focusedCell;
+
+  if (cellType === "C") {
+    // Decrypt C-Entry cell only
+    if (!msgBody || !msgId) return;
+    revealRow(row, msgBody, msgId);
+  } else if (cellType === "D") {
+    // Decrypt D-Reply cell only
+    if (cellEl._decryptFn) cellEl._decryptFn();
+  }
 });
 
 // Mobile: long-press anywhere on lock overlay to unlock (hold 1.5s)

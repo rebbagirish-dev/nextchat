@@ -370,18 +370,22 @@ def api_messages():
     if not other:
         return jsonify([])
     other_id = other["id"]
-    # Mark incoming messages as delivered
     qexec(f"UPDATE messages SET status='delivered' WHERE sender_id={p} AND receiver_id={p} AND status='sent'",
           (other_id, my_id))
+    # For each message, also fetch the reply that was sent TO it (if any)
+    # reply_body = body of the message that has reply_to = this message's id
     rows = qfetch(f"""
         SELECT m.id, m.sender_id, m.body, m.timestamp, m.status, m.reply_to,
-               r.body AS reply_body, r.sender_id AS reply_sender_id
+               rep.body        AS reply_body,
+               rep.sender_id   AS reply_sender_id
         FROM messages m
-        LEFT JOIN messages r ON m.reply_to = r.id
+        LEFT JOIN messages rep ON rep.reply_to = m.id
         WHERE (m.sender_id={p} AND m.receiver_id={p}) OR (m.sender_id={p} AND m.receiver_id={p})
         ORDER BY m.id ASC
     """, (my_id, other_id, other_id, my_id))
-    return jsonify(rows)
+    # Filter out rows that are themselves replies (they are shown in D of the original)
+    visible = [r for r in rows if not r["reply_to"]]
+    return jsonify(visible)
 
 @app.route("/api/send", methods=["POST"])
 def api_send():
