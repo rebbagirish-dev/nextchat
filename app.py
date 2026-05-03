@@ -372,20 +372,23 @@ def api_messages():
     other_id = other["id"]
     qexec(f"UPDATE messages SET status='delivered' WHERE sender_id={p} AND receiver_id={p} AND status='sent'",
           (other_id, my_id))
-    # For each message, also fetch the reply that was sent TO it (if any)
-    # reply_body = body of the message that has reply_to = this message's id
+    # Fetch all messages with reply JOIN
     rows = qfetch(f"""
         SELECT m.id, m.sender_id, m.body, m.timestamp, m.status, m.reply_to,
                rep.body        AS reply_body,
-               rep.sender_id   AS reply_sender_id
+               rep.sender_id   AS reply_sender_id,
+               rep.id          AS reply_msg_id
         FROM messages m
         LEFT JOIN messages rep ON rep.reply_to = m.id
         WHERE (m.sender_id={p} AND m.receiver_id={p}) OR (m.sender_id={p} AND m.receiver_id={p})
         ORDER BY m.id ASC
     """, (my_id, other_id, other_id, my_id))
-    # Filter out rows that are themselves replies (they are shown in D of the original)
+    # Total count includes replies (used as render key so D column updates)
+    total = len(rows)
+    # Visible rows: exclude messages that are themselves replies
     visible = [r for r in rows if not r["reply_to"]]
-    return jsonify(visible)
+    # Attach total to first visible row as metadata signal
+    return jsonify({"rows": visible, "total": total})
 
 @app.route("/api/send", methods=["POST"])
 def api_send():

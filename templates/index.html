@@ -914,7 +914,13 @@ function formatBody(text) {
 
 // ── Messages — Excel row renderer ────────────────────────────────────────────
 async function loadMessages() {
-  const msgs = await api("/api/messages").catch(() => []);
+  const resp = await api("/api/messages").catch(() => null);
+  if (!resp) return;
+
+  // Handle both old array format and new {rows, total} format
+  const msgs  = Array.isArray(resp) ? resp : (resp.rows || []);
+  const total = Array.isArray(resp) ? msgs.length : (resp.total || msgs.length);
+
   const area  = document.getElementById("chat-area");
   const empty = document.getElementById("empty-state");
 
@@ -928,7 +934,8 @@ async function loadMessages() {
     return;
   }
 
-  const latestKey = `${msgs.length}_${msgs[msgs.length-1].id}`;
+  // Use total (includes reply messages) as render key so D column updates when replies arrive
+  const latestKey = `${total}_${msgs[msgs.length-1].id}`;
   if (area.dataset.renderKey === latestKey) return;
 
   // Notify on new incoming
