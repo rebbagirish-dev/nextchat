@@ -1068,7 +1068,7 @@ async function loadMessages() {
       });
     }
 
-    // ── Column D — reply content + reply icon ───────────────────────────────────
+    // ── Column D — reply content only (no reply icon here anymore) ────────────
     const cellD = document.createElement("div");
     cellD.className = "xl-cell-d";
     cellD.style.overflow = "hidden";
@@ -1082,17 +1082,17 @@ async function loadMessages() {
       : "";
     const dMsgId = String(msg.id) + "_reply";
 
-    // Reply icon — hover-visible, always shown
+    // Reply icon lives in cellC (hover-visible at end of message content)
     const replyIcon = document.createElement("span");
     replyIcon.className = "xl-reply-icon";
     replyIcon.textContent = "↩";
-    replyIcon.style.flexShrink = "0";
+    replyIcon.style.cssText = "flex-shrink:0;margin-left:auto;";
     replyIcon.addEventListener("click", e => {
       e.stopPropagation();
       const preview = isImage ? "📎 Image" : msg.body.slice(0, 50) + (msg.body.length > 50 ? "…" : "");
       setReply(msg.id, preview);
     });
-    cellD.appendChild(replyIcon);
+    cellC.appendChild(replyIcon);
 
     // Reply content span — only if this message is a reply
     if (hasReply) {
