@@ -191,6 +191,8 @@ body {
 .xl-cell-c { flex:3; min-width:0; overflow:hidden; padding:2px 8px; font-size:12.5px; color:var(--xl-text); display:flex; align-items:center; word-break:break-word; border-right:1px solid var(--xl-border); font-family:'Calibri',sans-serif; line-height:1.4; }
 .xl-cell-c.me-cell { background:var(--xl-cell-me); }
 .xl-cell-c.them-cell { background:var(--xl-cell-them); }
+.xl-cell-d.me-cell { background:var(--xl-cell-me); }
+.xl-cell-d.them-cell { background:var(--xl-cell-them); }
 .xl-cell-c.encrypted-cell { font-family:monospace; color:var(--xl-sub); font-size:10.5px; letter-spacing:.5px; cursor:pointer; opacity:.7; }
 .xl-cell-c.encrypted-cell:hover { background:rgba(33,115,70,.08); opacity:1; }
 .xl-cell-d { flex:2; min-width:0; overflow:hidden; font-size:10.5px; color:var(--xl-sub); padding:2px 5px; display:flex; align-items:center; gap:4px; border-right:1px solid var(--xl-border); font-family:'Calibri',sans-serif; }
@@ -1096,13 +1098,15 @@ async function loadMessages() {
 
     // Reply content span — only if this message is a reply
     if (hasReply) {
+      // Use a numeric seed derived from msg.id + a fixed offset so it differs from C
+      const replyEncryptId = msg.id * 31 + 7;  // numeric — avoids NaN from string id
       const isReplyRevealed = revealedMsgs.has(dMsgId);
       const replySpan = document.createElement("span");
       replySpan.style.cssText = "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:default;pointer-events:none;font-style:italic;";
 
       function encryptReplySpan() {
         replySpan.classList.add("xl-reply-encrypted");
-        replySpan.innerHTML = `🔒&nbsp;${escHtml(encryptText(replyFull, dMsgId).slice(0, 22))}`;
+        replySpan.innerHTML = `🔒&nbsp;${escHtml(encryptText(replyFull, replyEncryptId).slice(0, 22))}`;
         replySpan.removeAttribute("title");
       }
       function decryptReplySpan() {
@@ -1131,6 +1135,9 @@ async function loadMessages() {
 
       cellD.appendChild(replySpan);
     }
+
+    // Color-code cellD same as cellC (me = green tint, them = white)
+    cellD.classList.add(isMe ? "me-cell" : "them-cell");
 
     // Column E - tick
     const cellE = document.createElement("div");
@@ -2044,9 +2051,9 @@ function applyFontSize() {
   const style = document.getElementById("dynamic-font-style") ||
     (() => { const s = document.createElement("style"); s.id = "dynamic-font-style"; document.head.appendChild(s); return s; })();
   style.textContent = `
-    .xl-cell-c { font-size: ${appFontSize}px !important; }
+    .xl-cell-c, .xl-cell-d { font-size: ${appFontSize}px !important; }
     #msg-input  { font-size: ${Math.max(appFontSize, 14)}px !important; }
-    .xl-cell-a, .xl-cell-b, .xl-cell-d { font-size: ${Math.max(appFontSize - 1, 8)}px !important; }
+    .xl-cell-a, .xl-cell-b { font-size: ${Math.max(appFontSize - 1, 8)}px !important; }
   `;
   document.getElementById("font-size-label") && (document.getElementById("font-size-label").textContent = appFontSize);
 }
